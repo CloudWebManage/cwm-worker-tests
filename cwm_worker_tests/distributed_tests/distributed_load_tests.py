@@ -237,7 +237,7 @@ def run_distributed_load_tests(servers, load_generator, prepare_domain_names, ro
                         server['https_completed'] = False
                         start_server_load_tests(
                             tempdir, server['name'], server['ip'],
-                            server['load_test_domain_num'], server['objects'], server['duration'], server['concurrency'],
+                            server['load_test_domain_num'], server['objects'], server['duration_seconds'], server['concurrency'],
                             server['obj_size_kb'], 'https', server['custom_load_options'], load_generator
                         )
                     else:

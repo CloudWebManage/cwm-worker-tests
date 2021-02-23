@@ -89,7 +89,7 @@ def distributed_load_test(**kwargs):
 
 
 @main.command()
-@click.argument('TESTS_CONFIG', help="json string or base64 encoded json string prefixed with 'b64:'")
+@click.argument('TESTS_CONFIG')
 def distributed_load_test_multi(tests_config):
     """Run multiple distributed load tests
 

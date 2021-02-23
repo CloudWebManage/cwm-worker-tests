@@ -77,9 +77,9 @@ def build_test_docker_image(tempdir, name, ip):
                             {ssh} "mkdir /root/cwm-worker-cluster" &&\
                             {scp} -r ../cwm-worker-cluster/clusters root@{ip}:/root/cwm-worker-cluster/clusters &&\
                             {scp} -r ../cwm-worker-cluster/cwm_worker_cluster root@{ip}:/root/cwm-worker-cluster/cwm_worker_cluster &&\
+                            {scp} -r ../cwm-worker-cluster/tests root@{ip}:/root/cwm-worker-cluster/tests &&\
                             {scp} ../cwm-worker-cluster/setup.py root@{ip}:/root/cwm-worker-cluster/setup.py &&\
-                            {scp} -r ../cwm-worker-tests root@{ip}:/root/cwm-worker-cluster/cwm-worker-tests &&\
-                            {ssh} "cd /root/cwm-worker-cluster && docker build -t tests -f cwm-worker-tests/Dockerfile ."
+                            {ssh} "cd /root/cwm-worker-cluster && docker build -t tests -f tests/Dockerfile --build-arg CWM_WORKER_TESTS_VERSION=`date +%s` ."
                         '''.format(ip=ip, ssh=ssh, scp=scp))
     assert ret == 0, out
 
