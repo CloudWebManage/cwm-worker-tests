@@ -1,0 +1,10 @@
+pytest==5.4.3
+boto3==1.16.18
+uuid==1.30
+redis==3.5.3
+ruamel.yaml==0.16.12
+requests==2.25.0
+zstandard==0.14.0
+dataflows==0.2.0
+pytz==2021.1
+click==7.1.2
