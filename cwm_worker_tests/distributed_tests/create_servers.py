@@ -72,15 +72,16 @@ def build_test_docker_image(tempdir, name, ip):
     print("Building tests docker image on server {}".format(name))
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(ip, tempdir)
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
+    cwm_worker_cluster_path = '.' if os.path.exists('./clusters') else '../cwm-worker-cluster'
     ret, out = subprocess.getstatusoutput('''
                             {ssh} "rm -rf /root/cwm-worker-cluster" &&\
                             {ssh} "mkdir /root/cwm-worker-cluster" &&\
-                            {scp} -r ../cwm-worker-cluster/clusters root@{ip}:/root/cwm-worker-cluster/clusters &&\
-                            {scp} -r ../cwm-worker-cluster/cwm_worker_cluster root@{ip}:/root/cwm-worker-cluster/cwm_worker_cluster &&\
-                            {scp} -r ../cwm-worker-cluster/tests root@{ip}:/root/cwm-worker-cluster/tests &&\
-                            {scp} ../cwm-worker-cluster/setup.py root@{ip}:/root/cwm-worker-cluster/setup.py &&\
+                            {scp} -r {cwm_worker_cluster_path}/clusters root@{ip}:/root/cwm-worker-cluster/clusters &&\
+                            {scp} -r {cwm_worker_cluster_path}/cwm_worker_cluster root@{ip}:/root/cwm-worker-cluster/cwm_worker_cluster &&\
+                            {scp} -r {cwm_worker_cluster_path}/tests root@{ip}:/root/cwm-worker-cluster/tests &&\
+                            {scp} {cwm_worker_cluster_path}/setup.py root@{ip}:/root/cwm-worker-cluster/setup.py &&\
                             {ssh} "cd /root/cwm-worker-cluster && docker build -t tests -f tests/Dockerfile --build-arg CWM_WORKER_TESTS_VERSION=`date +%s` ."
-                        '''.format(ip=ip, ssh=ssh, scp=scp))
+                        '''.format(ip=ip, ssh=ssh, scp=scp, cwm_worker_cluster_path=cwm_worker_cluster_path))
     assert ret == 0, out
 
 

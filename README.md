@@ -42,7 +42,12 @@ Connect your kubectl to a cwm-worker cluster, following should show cwm-worker c
 kubectl get nodes
 ```
 
-Make sure cwm-worker-cluster is a sibling directory of cwm-worker-tests
+Additional requirements for some of the tests:
+
+* cwm-worker-cluster repository is required in one of the following locations:
+    * current working directory is cwm-worker-cluster/ - doesn't matter where cwm-worker-tests is
+    * current working directory is cwm-worker-tests/ - cwm-worker-cluster should be at ../cwm-worker-cluster
+* the distributed load test downloads some code from git, so you need to commit & push for changes to take effect
 
 See the CLI help messages
 

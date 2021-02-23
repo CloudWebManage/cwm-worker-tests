@@ -6,3 +6,4 @@ warp-bench-data*
 .temp
 .distributed-load-test-output
 .keep_servers.json
+.cloudcli.yaml
