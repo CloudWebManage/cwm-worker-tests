@@ -8,6 +8,24 @@ from cwm_worker_cluster import config
 import cwm_worker_tests.distributed_load_test
 
 
+def run_test(testnum, test, dry_run):
+    kwargs = dict(
+        objects=test.get('objects', 10), duration_seconds=test.get('duration_seconds', 10),
+        concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
+        num_extra_eu_servers=test.get('num_extra_eu_servers', 0),
+        num_base_servers=test.get('num_base_servers', 4),
+        base_servers_all_eu=test.get('base_servers_all_eu', True),
+        only_test_method=test.get('only_test_method'),
+        load_generator=test.get('load_generator', 'warp'),
+        custom_load_options=test.get('custom_load_options', {}),
+        with_deploy=True if testnum == 1 else False
+    )
+    if dry_run:
+        pprint(kwargs)
+    else:
+        cwm_worker_tests.distributed_load_test.main(**kwargs)
+
+
 def main(tests_config):
     tests = tests_config['tests']
     dry_run = tests_config.get('dry_run', False)
@@ -32,22 +50,11 @@ def main(tests_config):
         print("Multi test #{}".format(i))
         pprint(test)
         ok = results[i]['ok'] = True
-        if not dry_run:
-            try:
-                cwm_worker_tests.distributed_load_test.main(
-                    objects=test.get('objects', 10), duration_seconds=tests.get('duration_seconds', 10),
-                    concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
-                    num_extra_eu_servers=test.get('num_extra_eu_servers', 0),
-                    num_base_servers=test.get('num_base_servers', 4),
-                    base_servers_all_eu=test.get('base_servers_all_eu', True),
-                    only_test_method=test.get('only_test_method'),
-                    load_generator=test.get('load_generator', 'warp'),
-                    custom_load_options=test.get('custom_load_options', {}),
-                    with_deploy=True if i == 1 else False
-                )
-            except:
-                traceback.print_exc()
-                ok = results[i]['ok'] = False
+        try:
+            run_test(i, test, dry_run)
+        except:
+            traceback.print_exc()
+            ok = results[i]['ok'] = False
         with open(os.path.join(test_path, "result.json"), "w") as f:
             f.write("true" if ok else "false")
         print("ok={}".format(ok))

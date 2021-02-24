@@ -7,3 +7,4 @@ warp-bench-data*
 .distributed-load-test-output
 .keep_servers.json
 .cloudcli.yaml
+.distributed-load-test-multi

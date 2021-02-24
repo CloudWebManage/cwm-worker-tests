@@ -99,6 +99,21 @@ def distributed_load_test_multi(tests_config):
     tests - list of objects, each object is a test which will run with args to override in the defaults for this test
     dry_run - boolean
     stop_on_error - boolean (default=true)
+
+    example tests_config with all defaults:
+    {
+        "defaults": {
+            "objects": 10, "duration_seconds": 10, "concurrency": 6, "obj_size_kb": 10, "num_extra_eu_servers": 0,
+            "num_base_servers": 4, "base_servers_all_eu": true, "only_test_method": null, "load_generator": "warp",
+            "custom_load_options": {}
+        },
+        "tests": [
+            {"objects": 20},
+            {"concurrency": 20}
+        ],
+        "dry_run": false,
+        "stop_on_error": true
+    }
     """
     tests_config = parse_custom_load_options(tests_config)
     cwm_worker_tests.distributed_load_test_multi.main(tests_config)

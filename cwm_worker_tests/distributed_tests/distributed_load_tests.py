@@ -183,27 +183,29 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress):
 
 
 def post_delete_cleanup(servers, create_servers_stats):
-    eu_load_test_domain_nums = set()
-    for server_num in servers.keys():
-        eu_load_test_domain_nums.add(server_num if server_num < 5 else 1)
-    print("Cleaning up volumes")
-    for eu_load_test_domain_num in eu_load_test_domain_nums:
-        domain_name = get_domain_name_from_num(eu_load_test_domain_num)
-        volume_id = domain_name.replace('.', '--')
-        ok = False
-        for try_num in range(3):
-            try:
-                worker.delete(domain_name)
-                time.sleep(5)
-                worker.add_clear_volume(volume_id)
-                ok = True
-                break
-            except Exception:
-                traceback.print_exc()
-                print("Failed to clear worker, will retry up to 3 times")
-        if not ok:
-            print("Failed to clear worker {} 3 times, giving up".format(domain_name))
-            create_servers_stats["post_delete_failed"] = True
+    # no need to cleanup after every load test, we rely on cleanup before
+    pass
+#     eu_load_test_domain_nums = set()
+#     for server_num in servers.keys():
+#         eu_load_test_domain_nums.add(server_num if server_num < 5 else 1)
+#     print("Cleaning up volumes")
+#     for eu_load_test_domain_num in eu_load_test_domain_nums:
+#         domain_name = get_domain_name_from_num(eu_load_test_domain_num)
+#         volume_id = domain_name.replace('.', '--')
+#         ok = False
+#         for try_num in range(3):
+#             try:
+#                 worker.delete(domain_name)
+#                 time.sleep(5)
+#                 worker.add_clear_volume(volume_id)
+#                 ok = True
+#                 break
+#             except Exception:
+#                 traceback.print_exc()
+#                 print("Failed to clear worker, will retry up to 3 times")
+#         if not ok:
+#             print("Failed to clear worker {} 3 times, giving up".format(domain_name))
+#             create_servers_stats["post_delete_failed"] = True
 
 
 def run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress):
