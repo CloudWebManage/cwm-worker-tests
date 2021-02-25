@@ -147,8 +147,8 @@ def get_s3_resource(method, domain_name):
 
 def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
                           obj_size_kb=1, bucket_name=None, skip_delete_worker=False, skip_add_clear_worker_volume=False, skip_dummy_api=False,
-                          skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=False,
-                          upload_concurrency=50):
+                          skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=True,
+                          upload_concurrency=5):
     if not skip_all:
         common.worker_volume_api_recreate(domain_name=domain_name, skip_delete_worker=skip_delete_worker,
                                           skip_add_clear_worker_volume=skip_add_clear_worker_volume,
