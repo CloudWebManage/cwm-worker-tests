@@ -3,7 +3,9 @@ import time
 import random
 import urllib3
 import datetime
+import contextlib
 import subprocess
+import concurrent.futures
 from threading import Thread
 from collections import defaultdict
 
@@ -12,6 +14,7 @@ from botocore.client import Config
 from botocore.exceptions import ClientError
 
 from cwm_worker_cluster import config
+from cwm_worker_cluster import common
 
 
 urllib3.disable_warnings()
@@ -40,10 +43,9 @@ class RunCustomThread(Thread):
         duration_ns = int((end_time - start_time).total_seconds() * 1000000000)
         start = first_byte = start_time.strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
         end = end_time.strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
-        self.benchdatafile.write(
-            ",".join(map(str, [op, bytes if bytes else 0, endpoint, file, error if error else '', start, first_byte, end, duration_ns]))
-            + "\n"
-        )
+        writearg = ",".join(map(str, [op, bytes if bytes else 0, endpoint, file, error if error else '', start, first_byte, end, duration_ns])) + "\n"
+        if self.benchdatafile:
+            self.benchdatafile.write(writearg)
 
     def make_head_request(self, object, domain_name):
         self.stats['num_head_requests'] += 1
@@ -143,10 +145,21 @@ def get_s3_resource(method, domain_name):
                           config=Config(signature_version='s3v4'))
 
 
-def prepare_custom_bucket(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb, bucket_name=None):
+def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
+                          obj_size_kb=1, bucket_name=None, skip_delete_worker=False, skip_add_clear_worker_volume=False, skip_dummy_api=False,
+                          skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=False,
+                          upload_concurrency=50):
+    if not skip_all:
+        common.worker_volume_api_recreate(domain_name=domain_name, skip_delete_worker=skip_delete_worker,
+                                          skip_add_clear_worker_volume=skip_add_clear_worker_volume,
+                                          skip_dummy_api=skip_dummy_api, skip_clear_cache=skip_clear_cache,
+                                          skip_clear_volume=skip_clear_volume,
+                                          dummy_api_limited_to_node_name=dummy_api_limited_to_node_name)
+    else:
+        assert not dummy_api_limited_to_node_name, 'cannot limit dummy_api to node if skipping all recreation'
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
-    print("Creating bucket {}".format(bucket_name))
+    print("Creating bucket {} in domain_name {}".format(bucket_name, domain_name))
     s3 = get_s3_resource(method, domain_name)
     try:
         s3.create_bucket(Bucket=bucket_name)
@@ -158,9 +171,29 @@ def prepare_custom_bucket(method, domain_name, objects, duration_seconds, concur
     time.sleep(10)
     print("Uploading {} files, {} kb each".format(objects, obj_size_kb))
     bucket = s3.Bucket(bucket_name)
-    for i in range(int(objects)):
-        bucket.put_object(Key='file{}.rnd'.format(i+1), Body=random.getrandbits(int(obj_size_kb) * 1024 * 8).to_bytes(int(obj_size_kb) * 1024, 'little'))
+
+    def put_object(i):
+        bucket.put_object(Key='file{}.rnd'.format(i + 1), Body=random.getrandbits(int(obj_size_kb) * 1024 * 8).to_bytes(int(obj_size_kb) * 1024, 'little'))
+
+    if upload_concurrency:
+        print("Starting {} threads".format(upload_concurrency))
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=upload_concurrency)
+        for i in range(int(objects)):
+            executor.submit(put_object, i)
+        executor.shutdown(wait=True)
+    else:
+        for i in range(int(objects)):
+            put_object(i)
     return bucket_name
+
+
+@contextlib.contextmanager
+def open_benchdata_file(benchdatafilename, method):
+    if benchdatafilename:
+        with open('{}.{}.csv'.format(benchdatafilename, method), 'w') as benchdatafile:
+            yield benchdatafile
+    else:
+        yield None
 
 
 def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb,
@@ -171,7 +204,6 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
     assert objects > 0
     assert duration_seconds > 0, "duration_seconds must be bigger than 0"
     assert obj_size_kb > 0, "obj_size argument should be empty for custom load generator"
-    assert benchdatafilename, "benchdatafilename must be provided for custom load generator"
     bucket_name = custom_load_options.get("bucket_name")
     if bucket_name:
         print("Using pre-prepared bucket {}".format(bucket_name))
@@ -188,8 +220,9 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         bucket = s3.Bucket(bucket_name)
         domain_name_buckets = {domain_name: bucket}
     print("Starting {} threads of custom load ({})".format(concurrency, method))
-    with open('{}.{}.csv'.format(benchdatafilename, method), 'w') as benchdatafile:
-        benchdatafile.write("op,bytes,endpoint,file,error,start,first_byte,end,duration_ns\n")
+    with open_benchdata_file(benchdatafilename, method) as benchdatafile:
+        if benchdatafile:
+            benchdatafile.write("op,bytes,endpoint,file,error,start,first_byte,end,duration_ns\n")
         threads = {}
         for i in range(concurrency):
             thread = RunCustomThread(i+1, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, domain_name_buckets)
@@ -217,9 +250,10 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
                 if threads[i].is_alive():
                     is_alive = True
                     break
-    print("Compressing benchdata file")
-    ret, out = subprocess.getstatusoutput("gzip -fq {}.{}.csv".format(benchdatafilename, method))
-    assert ret == 0, out
+    if benchdatafilename:
+        print("Compressing benchdata file")
+        ret, out = subprocess.getstatusoutput("gzip -fq {}.{}.csv".format(benchdatafilename, method))
+        assert ret == 0, out
     total_elapsed_seconds = sum([thread.stats['elapsed_seconds'] for thread in threads.values()])
     total_get_requests = sum([thread.stats['num_get_requests'] for thread in threads.values()])
     total_del_requests = sum([thread.stats['num_del_requests'] for thread in threads.values()])
