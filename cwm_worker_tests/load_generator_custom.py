@@ -159,7 +159,7 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
         assert not dummy_api_limited_to_node_name, 'cannot limit dummy_api to node if skipping all recreation'
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
-    print("Creating bucket {} in domain_name {}".format(bucket_name, domain_name))
+    print("Creating bucket {} in domain_name {} method {}".format(bucket_name, domain_name, method))
     s3 = get_s3_resource(method, domain_name)
     try:
         s3.create_bucket(Bucket=bucket_name)
