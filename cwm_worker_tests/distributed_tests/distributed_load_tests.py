@@ -459,7 +459,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                 total_megabytes = total_bytes / 1024 / 1024
                 total_requests = row.get('{}-requests'.format(op)) or 0
                 error_requests = row.get('{}-errors'.format(op)) or 0
-                row['{}-percent-errors'.format(op)] = error_requests / total_requests if total_requests > 0 else 0
+                row['{}-percent-errors'.format(op)] = (error_requests / total_requests * 100) if total_requests > 0 else 0
                 row['{}-requests-per-second'.format(op)] = (total_requests - error_requests) / total_duration_seconds
                 row['{}-megabytes-per-second'.format(op)] = total_megabytes / total_duration_seconds
             output_row = {
@@ -511,11 +511,11 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                         totals_sum[op_metric] += (output_row.get(op_metric) or 0)
                     else:
                         totals_sum[op_metric] = 0
-        totals_sum['total-percent-errors'] = (totals_sum['total-errors'] / totals_sum['total-requests']) if totals_sum['total-requests'] > 0 else 0
+        totals_sum['total-percent-errors'] = (totals_sum['total-errors'] / totals_sum['total-requests'] * 100) if totals_sum['total-requests'] > 0 else 0
         totals_sum['total-requests-per-second'] = (totals_sum['total-requests'] - totals_sum['total-errors']) / total_duration_seconds
         totals_sum['total-megabytes-per-second'] = totals_sum['total-bytes'] / 1024 / 1024 / total_duration_seconds
         for op in ['GET', 'PUT', 'STAT', 'DELETE']:
-            totals_sum['{}-percent-errors'.format(op)] = (totals_sum['{}-errors'.format(op)] / totals_sum['{}-requests'.format(op)]) if totals_sum['{}-requests'.format(op)] > 0 else 0
+            totals_sum['{}-percent-errors'.format(op)] = (totals_sum['{}-errors'.format(op)] / totals_sum['{}-requests'.format(op)] * 100) if totals_sum['{}-requests'.format(op)] > 0 else 0
             totals_sum['{}-requests-per-second'.format(op)] = totals_sum['{}-requests'.format(op)] / total_duration_seconds
             totals_sum['{}-megabytes-per-second'.format(op)] = totals_sum['{}-bytes'.format(op)] / 1024 / 1024 / total_duration_seconds
         yield {
