@@ -170,14 +170,14 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress):
             for domain_name in prepare_domain_names:
                 print("domain_name={}".format(domain_name))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
-                    prepare_custom_bucket('http', domain_name, objects, duration_seconds, concurrency, obj_size_kb, bucket_name=bucket_name)
+                    prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb, bucket_name=bucket_name)
             for server in servers.values():
                 server['custom_load_options']['bucket_name'] = bucket_name
         else:
             for domain_name in domain_name_servers.keys():
                 print("preparing custom load generator for domain_name {}".format(domain_name))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
-                    bucket_name = prepare_custom_bucket('http', domain_name, objects, duration_seconds, concurrency, obj_size_kb)
+                    bucket_name = prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb)
                 for server in domain_name_servers[domain_name]:
                     server['custom_load_options']['bucket_name'] = bucket_name
 
