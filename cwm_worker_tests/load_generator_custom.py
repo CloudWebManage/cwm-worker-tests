@@ -35,6 +35,13 @@ class RunCustomThread(Thread):
         self.custom_load_options = custom_load_options
         self.benchdatafile = benchdatafile
         self.domain_name_buckets = domain_name_buckets
+        self.domain_name_buckets_cache = {}
+
+    def get_bucket(self, domain_name):
+        if domain_name not in self.domain_name_buckets_cache:
+            s3 = get_s3_resource(self.method, domain_name, with_retries=False)
+            self.domain_name_buckets_cache[domain_name] = s3.Bucket(self.domain_name_buckets[domain_name])
+        return self.domain_name_buckets_cache[domain_name]
 
     def write_benchdata(self, op, bytes, file, error, start_time, end_time, domain_name):
         file = file.replace(',', '_') if file else ''
@@ -82,7 +89,7 @@ class RunCustomThread(Thread):
         del_request_error = None
         del_request_start = datetime.datetime.now()
         try:
-            self.domain_name_buckets[domain_name].Object(key).delete()
+            self.get_bucket(domain_name).Object(key).delete()
         except Exception as e:
             del_request_error = str(e)
         del_request_end = datetime.datetime.now()
@@ -94,7 +101,7 @@ class RunCustomThread(Thread):
         put_request_error = None
         put_request_start = datetime.datetime.now()
         try:
-            self.domain_name_buckets[domain_name].put_object(Key=key, Body=random.getrandbits(int(self.obj_size_kb) * 1024 * 8).to_bytes(int(self.obj_size_kb) * 1024, 'little'))
+            self.get_bucket(domain_name).put_object(Key=key, Body=random.getrandbits(int(self.obj_size_kb) * 1024 * 8).to_bytes(int(self.obj_size_kb) * 1024, 'little'))
         except Exception as e:
             put_request_error = str(e)
         put_request_end = datetime.datetime.now()
@@ -118,7 +125,7 @@ class RunCustomThread(Thread):
 
     def get_domain_name_bucket(self):
         domain_name = random.choice(list(self.domain_name_buckets.keys()))
-        return domain_name, self.domain_name_buckets[domain_name]
+        return domain_name, self.get_bucket(domain_name)
 
     def run(self):
         make_put_or_del_every_iterations = self.custom_load_options.get('make_put_or_del_every_iterations', 100)
@@ -171,9 +178,10 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
             raise
     time.sleep(10)
     print("Uploading {} files, {} kb each".format(objects, obj_size_kb))
-    bucket = s3.Bucket(bucket_name)
 
     def put_object(i):
+        s3 = get_s3_resource(method, domain_name, with_retries=True)
+        bucket = s3.Bucket(bucket_name)
         bucket.put_object(Key='file{}.rnd'.format(i + 1), Body=random.getrandbits(int(obj_size_kb) * 1024 * 8).to_bytes(int(obj_size_kb) * 1024, 'little'))
 
     if upload_concurrency:
@@ -213,13 +221,11 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         bucket_name = prepare_custom_bucket(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb)
     if custom_load_options.get('random_domain_names'):
         domain_name_buckets = {
-            domain_name: get_s3_resource(method, domain_name).Bucket(bucket_name)
+            domain_name: bucket_name
             for domain_name in custom_load_options['random_domain_names']
         }
     else:
-        s3 = get_s3_resource(method, domain_name)
-        bucket = s3.Bucket(bucket_name)
-        domain_name_buckets = {domain_name: bucket}
+        domain_name_buckets = {domain_name: bucket_name}
     print("Starting {} threads of custom load ({})".format(concurrency, method))
     with open_benchdata_file(benchdatafilename, method) as benchdatafile:
         if benchdatafile:
