@@ -21,6 +21,8 @@ from cwm_worker_tests.distributed_tests import create_servers
 
 
 DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR = '.distributed-load-test-output'
+BUCKET_MAX_SECONDS = [0.1, 0.25, 0.5, 1, 2, 4, 8]
+BUCKET_INF = 'inf'
 
 
 def get_domain_name_from_num(domain_num):
@@ -341,7 +343,7 @@ def csv_decompress(csv_compression_method, csv_compressed_filename, csv_filename
 def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu, only_test_method, load_generator):
     overview_report = {}
     load_steps = []
-    for num, server in servers.items():
+    for num, _ in servers.items():
         log_txt_filename = os.path.join(DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR, str(num), '.output', 'log.txt')
         http_csv_zst_filename = os.path.join(DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR, str(num), '.output', 'warp-bench-data.http.csv.zst')
         http_csv_gz_filename = os.path.join(DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR, str(num), '.output', 'warp-bench-data.http.csv.gz')
@@ -394,7 +396,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
         if error:
             stats['{}~errors'.format(key_prefix)] += 1
         else:
-            stats['{}~requests'.format(key_prefix)] += 1
+            stats['{}~successful-requests'.format(key_prefix)] += 1
             stats['{}~bytes'.format(key_prefix)] += bytes
             stats['{}~duration_ns'.format(key_prefix)] += duration_ns
             stats['{}~duration_after_first_byte_ns'.format(key_prefix)] += duration_after_first_byte_ns
@@ -402,6 +404,15 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                 stats['{}~max-duration_ns'.format(key_prefix)] = duration_ns
             if stats['{}~min-duration_ns'.format(key_prefix)] == 0 or duration_ns < stats['{}~min-duration_ns'.format(key_prefix)]:
                 stats['{}~min-duration_ns'.format(key_prefix)] = duration_ns
+            duration_seconds = duration_ns / 1000000000
+            bucket = None
+            for bucket_max_seconds in BUCKET_MAX_SECONDS:
+                if duration_seconds <= bucket_max_seconds:
+                    bucket = bucket_max_seconds
+                    break
+            if not bucket:
+                bucket = BUCKET_INF
+            stats['{}~request-duration-{}'.format(key_prefix, bucket)] += 1
 
     def aggregate_errors(rows):
         for row in rows:
@@ -457,11 +468,22 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
             for op in ['STAT', 'DELETE', 'GET', 'PUT']:
                 total_bytes = row.get('{}-bytes'.format(op)) or 0
                 total_megabytes = total_bytes / 1024 / 1024
-                total_requests = row.get('{}-requests'.format(op)) or 0
+                successful_requests = row.get('{}-successful-requests'.format(op)) or 0
                 error_requests = row.get('{}-errors'.format(op)) or 0
+                total_requests = successful_requests + error_requests
                 row['{}-percent-errors'.format(op)] = (error_requests / total_requests * 100) if total_requests > 0 else 0
-                row['{}-requests-per-second'.format(op)] = (total_requests - error_requests) / total_duration_seconds
-                row['{}-megabytes-per-second'.format(op)] = total_megabytes / total_duration_seconds
+                row['{}-requests-per-second'.format(op)] = total_requests / total_duration_seconds
+                row['{}-successful-requests-per-second'.format(op)] = successful_requests / total_duration_seconds
+                if op in ['GET', 'PUT']:
+                    row['{}-megabytes'.format(op)] = total_megabytes
+                    row['{}-megabytes-per-second'.format(op)] = total_megabytes / total_duration_seconds
+                    for bucket in [*BUCKET_MAX_SECONDS, BUCKET_INF]:
+                        row['{}-request-duration-percent-{}'.format(op, bucket)] = ((row.get('{}-request-duration-{}'.format(op, bucket)) or 0) / successful_requests * 100) if successful_requests > 0 else 0
+            all_ops_total_errors = sum([(row.get('{}-errors'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']])
+            all_ops_total_successful_requests = sum([(row.get('{}-successful-requests'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']])
+            all_ops_total_requests = all_ops_total_errors + all_ops_total_successful_requests
+            all_ops_total_bytes = sum([(row.get('{}-bytes'.format(op)) or 0) for op in ['GET', 'PUT']])
+            all_ops_total_megabytes = all_ops_total_bytes / 1024 / 1024
             output_row = {
                 'endpoint': endpoint,
                 'datacenter': {
@@ -474,50 +496,57 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                     'http://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(4)): 'EU-LO',
                     'https://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(4)): 'EU-LO',
                 }[endpoint] if not base_servers_all_eu else 'EU',
-                'total-percent-errors': sum([(row.get('{}-percent-errors'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']]),
-                'total-requests-per-second': sum([(row.get('{}-requests-per-second'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']]),
-                'total-megabytes-per-second': sum([(row.get('{}-megabytes-per-second'.format(op)) or 0) for op in ['GET', 'PUT']]),
-                'total-errors': sum([(row.get('{}-errors'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']]),
-                'total-requests': sum([(row.get('{}-requests'.format(op)) or 0) for op in ['GET', 'PUT', 'STAT', 'DELETE']]),
-                'total-bytes': sum([(row.get('{}-bytes'.format(op)) or 0) for op in ['GET', 'PUT']]),
+                'total-percent-errors': (all_ops_total_errors / all_ops_total_requests * 100) if all_ops_total_requests > 0 else 0,
+                'total-requests-per-second': all_ops_total_requests / total_duration_seconds,
+                'total-successful-requests-per-second': all_ops_total_successful_requests / total_duration_seconds,
+                'total-megabytes-per-second': all_ops_total_megabytes / total_duration_seconds,
+                'total-errors': all_ops_total_errors,
+                'total-successful-requests': all_ops_total_successful_requests,
+                'total-megabytes': all_ops_total_megabytes,
+                'total-bytes': all_ops_total_bytes,
                 **{k: row.get(k) or 0 for k in [
-                    'GET-percent-errors',
-                    'PUT-percent-errors',
-                    'STAT-percent-errors',
-                    'DELETE-percent-errors',
-                    'GET-requests-per-second',
-                    'PUT-requests-per-second',
-                    'STAT-requests-per-second',
-                    'DELETE-requests-per-second',
-                    'GET-megabytes-per-second',
-                    'PUT-megabytes-per-second',
-                    'GET-errors',
-                    'PUT-errors',
-                    'STAT-errors',
-                    'DELETE-errors',
-                    'GET-requests',
-                    'PUT-requests',
-                    'STAT-requests',
-                    'DELETE-requests',
-                    'GET-bytes',
-                    'PUT-bytes',
+                    *['{}-percent-errors'.format(op) for op in ['GET', 'PUT', 'STAT', 'DELETE']],
+                    *['{}-requests-per-second'.format(op) for op in ['GET', 'PUT', 'STAT', 'DELETE']],
+                    *['{}-successful-requests-per-second'.format(op) for op in ['GET', 'PUT', 'STAT', 'DELETE']],
+                    *['{}-megabytes-per-second'.format(op) for op in ['GET', 'PUT']],
+                    *['{}-errors'.format(op) for op in ['GET', 'PUT', 'STAT', 'DELETE']],
+                    *['{}-successful-requests'.format(op) for op in ['GET', 'PUT', 'STAT', 'DELETE']],
+                    *['{}-megabytes'.format(op) for op in ['GET', 'PUT']],
+                    *['{}-bytes'.format(op) for op in ['GET', 'PUT']],
+                    *['GET-request-duration-percent-{}'.format(bucket) for bucket in [*BUCKET_MAX_SECONDS, BUCKET_INF]],
+                    *['PUT-request-duration-percent-{}'.format(bucket) for bucket in [*BUCKET_MAX_SECONDS, BUCKET_INF]],
                 ]}
             }
             yield output_row
-            for metric in ['percent-errors', 'requests-per-second', 'megabytes-per-second', 'errors', 'requests', 'bytes']:
-                for op in ['total', 'GET', 'PUT', *(['STAT', 'DELETE'] if metric not in ['megabytes-per-second', 'bytes'] else [])]:
+            for metric in ['errors', 'successful-requests', 'bytes']:
+                for op in ['total', 'GET', 'PUT', *(['STAT', 'DELETE'] if metric not in ['bytes'] else [])]:
                     op_metric = '{}-{}'.format(op, metric)
-                    if metric in ['errors', 'requests', 'bytes']:
-                        totals_sum[op_metric] += (output_row.get(op_metric) or 0)
-                    else:
-                        totals_sum[op_metric] = 0
-        totals_sum['total-percent-errors'] = (totals_sum['total-errors'] / totals_sum['total-requests'] * 100) if totals_sum['total-requests'] > 0 else 0
-        totals_sum['total-requests-per-second'] = (totals_sum['total-requests'] - totals_sum['total-errors']) / total_duration_seconds
-        totals_sum['total-megabytes-per-second'] = totals_sum['total-bytes'] / 1024 / 1024 / total_duration_seconds
+                    totals_sum[op_metric] += (output_row.get(op_metric) or 0)
+            for op in ['GET', 'PUT']:
+                for bucket in [*BUCKET_MAX_SECONDS, BUCKET_INF]:
+                    op_bucket_metric_key = '{}-request-duration-{}'.format(op, bucket)
+                    totals_sum[op_bucket_metric_key] += (row.get(op_bucket_metric_key) or 0)
+        totals_sum_total_successful_requests = totals_sum['total-successful-requests']
+        totals_sum_total_errors = totals_sum['total-errors']
+        totals_sum_total_requests = totals_sum_total_successful_requests + totals_sum_total_errors
+        totals_sum_total_bytes = totals_sum['total-bytes']
+        totals_sum['total-megabytes'] = totals_sum_total_megabytes = totals_sum_total_bytes / 1024 / 1024
+        totals_sum['total-percent-errors'] = (totals_sum_total_errors / totals_sum_total_requests * 100) if totals_sum_total_requests > 0 else 0
+        totals_sum['total-requests-per-second'] = totals_sum_total_requests / total_duration_seconds
+        totals_sum['total-successful-requests-per-second'] = totals_sum_total_successful_requests / total_duration_seconds
+        totals_sum['total-megabytes-per-second'] = totals_sum_total_megabytes / total_duration_seconds
         for op in ['GET', 'PUT', 'STAT', 'DELETE']:
-            totals_sum['{}-percent-errors'.format(op)] = (totals_sum['{}-errors'.format(op)] / totals_sum['{}-requests'.format(op)] * 100) if totals_sum['{}-requests'.format(op)] > 0 else 0
-            totals_sum['{}-requests-per-second'.format(op)] = totals_sum['{}-requests'.format(op)] / total_duration_seconds
-            totals_sum['{}-megabytes-per-second'.format(op)] = totals_sum['{}-bytes'.format(op)] / 1024 / 1024 / total_duration_seconds
+            op_errors = totals_sum['{}-errors'.format(op)]
+            op_successful_requests = totals_sum['{}-successful-requests'.format(op)]
+            op_total_requests = op_errors + op_successful_requests
+            totals_sum['{}-percent-errors'.format(op)] = (op_errors / op_total_requests * 100) if op_total_requests > 0 else 0
+            totals_sum['{}-requests-per-second'.format(op)] = op_total_requests / total_duration_seconds
+            totals_sum['{}-successful-requests-per-second'.format(op)] = op_successful_requests / total_duration_seconds
+            if op in ['GET', 'PUT']:
+                totals_sum['{}-megabytes'.format(op)] = totals_sum['{}-bytes'.format(op)] / 1024 / 1024
+                totals_sum['{}-megabytes-per-second'.format(op)] = totals_sum['{}-megabytes'.format(op)] / total_duration_seconds
+                for bucket in [*BUCKET_MAX_SECONDS, BUCKET_INF]:
+                    totals_sum['{}-request-duration-percent-{}'.format(op, bucket)] = (totals_sum['{}-request-duration-{}'.format(op, bucket)] / op_successful_requests * 100) if op_successful_requests else 0
         yield {
             'endpoint': '*',
             'datacenter': '*',
@@ -528,7 +557,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
         DF.dump_to_path(os.path.join(DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR, 'warp_bench_data_stats'))
     ).process()
     pprint(overview_report)
-    for num, server in servers.items():
+    for num, _ in servers.items():
         for method in ['http', 'https']:
             if not only_test_method or only_test_method == method:
                 report = overview_report.get('server_{}_{}'.format(num, method)) or {}

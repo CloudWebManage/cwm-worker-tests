@@ -140,9 +140,10 @@ class RunCustomThread(Thread):
         self.stats['elapsed_seconds'] = (datetime.datetime.now() - start_time).total_seconds()
 
 
-def get_s3_resource(method, domain_name):
+def get_s3_resource(method, domain_name, with_retries=False):
+    retry_max_attempts = 10 if with_retries else 0
     return boto3.resource('s3', **config.get_deployment_s3_resource_kwargs(method, domain_name),
-                          config=Config(signature_version='s3v4'))
+                          config=Config(signature_version='s3v4', retries={'max_attempts': retry_max_attempts, 'mode': 'standard'}))
 
 
 def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
@@ -160,7 +161,7 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
     print("Creating bucket {} in domain_name {} method {}".format(bucket_name, domain_name, method))
-    s3 = get_s3_resource(method, domain_name)
+    s3 = get_s3_resource(method, domain_name, with_retries=True)
     try:
         s3.create_bucket(Bucket=bucket_name)
     except ClientError as e:

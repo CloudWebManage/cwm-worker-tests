@@ -6,6 +6,7 @@ import cwm_worker_tests.distributed_load_test_multi
 import cwm_worker_tests.cli_subcommands.load_generator_custom
 import cwm_worker_tests.cli_subcommands.load_generator_warp
 from cwm_worker_tests import common_cli
+import cwm_worker_tests.distributed_tests.distributed_load_tests
 
 
 @click.group(context_settings={'max_content_width': 200})
@@ -63,6 +64,17 @@ def distributed_load_test(**kwargs):
     """
     kwargs['custom_load_options'] = common_cli.parse_json_data(kwargs.get('custom_load_options'))
     cwm_worker_tests.distributed_load_test.main(**kwargs)
+
+
+@main.command()
+@click.option('--num-servers', required=True, type=int)
+@click.option('--total-duration-seconds', default=10, type=int)
+@click.option('--base-servers-all-eu', is_flag=True)
+@click.option('--only-test-method', type=str)
+@click.option('--load-generator', default='warp', type=str)
+def distributed_load_test_aggregate_test_results(**kwargs):
+    kwargs['servers'] = {i: {} for i in range(1, kwargs.pop('num_servers')+1)}
+    cwm_worker_tests.distributed_tests.distributed_load_tests.aggregate_test_results(**kwargs)
 
 
 @main.command()
