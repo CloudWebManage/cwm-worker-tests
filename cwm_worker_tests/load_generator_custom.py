@@ -39,7 +39,15 @@ class RunCustomThread(Thread):
 
     def get_bucket(self, domain_name):
         if domain_name not in self.domain_name_buckets_cache:
-            s3 = get_s3_resource(self.method, domain_name, with_retries=False)
+            start_time = datetime.datetime.now()
+            s3 = None
+            while not s3:
+                try:
+                    s3 = get_s3_resource(self.method, domain_name, with_retries=False)
+                except:
+                    if (datetime.datetime.now() - start_time).total_seconds() > 60:
+                        print("Timeout trying to get s3 resource")
+                        raise
             self.domain_name_buckets_cache[domain_name] = s3.Bucket(self.domain_name_buckets[domain_name])
         return self.domain_name_buckets_cache[domain_name]
 
