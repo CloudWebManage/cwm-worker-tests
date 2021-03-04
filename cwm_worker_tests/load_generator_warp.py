@@ -57,7 +57,8 @@ def get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, 
 
 
 def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb,
-        benchdatafilename, custom_load_options=None):
+        benchdatafilename, custom_load_options=None, use_default_bucket=False):
+    assert not use_default_bucket, 'use_default_bucket is not supported for warp load generator'
     duration = '{}s'.format(duration_seconds)
     obj_size = '{}KiB'.format(obj_size_kb)
     start_time = datetime.datetime.now()

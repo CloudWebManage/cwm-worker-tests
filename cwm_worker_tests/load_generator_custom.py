@@ -20,6 +20,9 @@ from cwm_worker_cluster import common
 urllib3.disable_warnings()
 
 
+DEFAULT_BUCKET_NAME = 'cwmwtlgcustomdefault'
+
+
 class RunCustomThread(Thread):
 
     def __init__(self, thread_num, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, domain_name_buckets):
@@ -164,7 +167,7 @@ def get_s3_resource(method, domain_name, with_retries=False):
 def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
                           obj_size_kb=1, bucket_name=None, skip_delete_worker=False, skip_add_clear_worker_volume=False, skip_dummy_api=False,
                           skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=True,
-                          upload_concurrency=5):
+                          upload_concurrency=5, skip_create_bucket=False, only_upload_filenums=None, delete_keys=None):
     if not skip_all:
         common.worker_volume_api_recreate(domain_name=domain_name, skip_delete_worker=skip_delete_worker,
                                           skip_add_clear_worker_volume=skip_add_clear_worker_volume,
@@ -177,30 +180,44 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
         bucket_name = str(uuid.uuid4())
     print("Creating bucket {} in domain_name {} method {}".format(bucket_name, domain_name, method))
     s3 = get_s3_resource(method, domain_name, with_retries=True)
-    try:
-        s3.create_bucket(Bucket=bucket_name)
-    except ClientError as e:
-        if e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
-            print('got botocore ClientError "BucketAlreadyOwnedByYou", this is probably fine')
-        else:
-            raise
-    time.sleep(10)
-    print("Uploading {} files, {} kb each".format(objects, obj_size_kb))
+    if not skip_create_bucket:
+        try:
+            s3.create_bucket(Bucket=bucket_name)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
+                print('got botocore ClientError "BucketAlreadyOwnedByYou", this is probably fine')
+            else:
+                raise
+        time.sleep(10)
+    print("Uploading {} files, {} kb each".format(objects if only_upload_filenums is None else len(only_upload_filenums), obj_size_kb))
+    filenums_iterator = range(int(objects)) if only_upload_filenums is None else only_upload_filenums
+    if delete_keys:
+        print("Deleting {} files".format(len(delete_keys)))
 
-    def put_object(i):
+    def put_or_del_object(op, key):
         s3 = get_s3_resource(method, domain_name, with_retries=True)
-        bucket = s3.Bucket(bucket_name)
-        bucket.put_object(Key='file{}.rnd'.format(i + 1), Body=random.getrandbits(int(obj_size_kb) * 1024 * 8).to_bytes(int(obj_size_kb) * 1024, 'little'))
+        if op == 'put':
+            bucket = s3.Bucket(bucket_name)
+            i = int(key)
+            bucket.put_object(Key='file{}.rnd'.format(i + 1), Body=random.getrandbits(int(obj_size_kb) * 1024 * 8).to_bytes(int(obj_size_kb) * 1024, 'little'))
+        elif op == 'del':
+            s3.delete_object(Bucket=bucket_name, Key=key)
 
     if upload_concurrency:
         print("Starting {} threads".format(upload_concurrency))
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=upload_concurrency)
-        for i in range(int(objects)):
-            executor.submit(put_object, i)
+        for i in filenums_iterator:
+            executor.submit(put_or_del_object, 'put', i)
+        if delete_keys:
+            for key in delete_keys:
+                executor.submit(put_or_del_object, 'del', key)
         executor.shutdown(wait=True)
     else:
-        for i in range(int(objects)):
-            put_object(i)
+        for i in filenums_iterator:
+            put_or_del_object('put', i)
+        if delete_keys:
+            for key in delete_keys:
+                put_or_del_object('del', key)
     return bucket_name
 
 
@@ -213,17 +230,50 @@ def open_benchdata_file(benchdatafilename, method):
         yield None
 
 
+def get_default_bucket_name(obj_size_kb):
+    return '{}-{}kb'.format(DEFAULT_BUCKET_NAME, obj_size_kb)
+
+
+def prepare_default_bucket(method, domain_name, objects, obj_size_kb, with_delete=False):
+    bucket_name = get_default_bucket_name(obj_size_kb)
+    bucket = get_s3_resource(method, domain_name, with_retries=True).Bucket(bucket_name)
+    bucket.load()
+    if not bucket.creation_date:
+        bucket.create()
+        time.sleep(10)
+    delete_threadkeys = set()
+    missing_filenums = set()
+    for i in range(int(objects)):
+        missing_filenums.add(i+1)
+    for object in bucket.objects.all():
+        if object.key.startswith('file') and object.key.endswith('.rnd') and object.size == obj_size_kb * 1024:
+            filenum = int(object.key.replace('file', '').replace('.rnd', ''))
+            if filenum in missing_filenums:
+                missing_filenums.remove(filenum)
+        elif object.key.startswith('Thread') and with_delete:
+            delete_threadkeys.add(object.key)
+    if len(missing_filenums) > 0 or len(delete_threadkeys) > 0:
+        prepare_custom_bucket(method, domain_name, obj_size_kb=obj_size_kb, bucket_name=bucket_name,
+                              skip_create_bucket=True, only_upload_filenums=missing_filenums, delete_keys=delete_threadkeys)
+
+
 def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb,
-        benchdatafilename, custom_load_options=None):
+        benchdatafilename, custom_load_options=None, use_default_bucket=False):
     assert method in ['http', 'https'], "invalid method: {}".format(method)
     if not custom_load_options.get('random_domain_names'):
         assert domain_name, "missing domain_name argument"
     assert objects > 0
     assert duration_seconds > 0, "duration_seconds must be bigger than 0"
     assert obj_size_kb > 0, "obj_size argument should be empty for custom load generator"
+    if custom_load_options.get('use_default_bucket'):
+        use_default_bucket = True
     bucket_name = custom_load_options.get("bucket_name")
     if bucket_name:
+        assert not use_default_bucket, 'cannot use default bucket if you specified a bucket name'
         print("Using pre-prepared bucket {}".format(bucket_name))
+    elif use_default_bucket:
+        bucket_name = get_default_bucket_name(obj_size_kb)
+        print("Using default bucket: {}".format(bucket_name))
     else:
         assert not custom_load_options.get('random_domain_names'), 'bucket must be pre-prepared when using random domain names'
         bucket_name = prepare_custom_bucket(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb)
@@ -234,6 +284,9 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         }
     else:
         domain_name_buckets = {domain_name: bucket_name}
+    if use_default_bucket:
+        for domain_name in domain_name_buckets.keys():
+            prepare_default_bucket(method, domain_name, objects, obj_size_kb)
     print("Starting {} threads of custom load ({})".format(concurrency, method))
     with open_benchdata_file(benchdatafilename, method) as benchdatafile:
         if benchdatafile:

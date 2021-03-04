@@ -68,7 +68,7 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         for i in range(5, 5+num_extra_eu_servers):
             servers[i] = {'datacenter': 'EU', **deepcopy(load_test_kwargs)}
         # run_failed = True
-        run_failed = not distributed_load_tests.run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress)
+        run_failed = not distributed_load_tests.run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options)
         pprint({"run_failed": progress.set('run_failed_after_run_distributed_load_tests', run_failed)})
         end_time = datetime.datetime.now()
         print('{} end load test'.format(end_time))

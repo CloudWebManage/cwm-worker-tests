@@ -16,7 +16,7 @@ from cwm_worker_cluster import common
 from cwm_worker_cluster import config
 from cwm_worker_cluster import dummy_api
 from cwm_worker_cluster import worker
-from cwm_worker_tests.load_generator_custom import prepare_custom_bucket
+from cwm_worker_tests.load_generator_custom import prepare_default_bucket, prepare_custom_bucket
 from cwm_worker_tests.distributed_tests import create_servers
 
 
@@ -90,7 +90,7 @@ def copy_load_test_data_from_remote_server(tempdir, server_ip, load_test_domain_
     assert ret == 0, out
 
 
-def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress):
+def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress, skip_clear_volume=False):
     with root_progress.start_sub(__spec__.name, 'add_clear_worker', domain_name) as progress:
         if not node_ip:
             node = common.get_cluster_nodes('worker')[0]
@@ -103,7 +103,7 @@ def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress):
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
             worker.delete(domain_name)
         with progress.set_start_end('add_clear_worker_volume_start', 'add_clear_worker_volume_end'):
-            worker.add_clear_volume(volume_id)
+            worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")
@@ -121,7 +121,7 @@ def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress):
             assert ok, "Failed to assert_site 3 times, giving up"
 
 
-def add_clear_workers(servers, prepare_domain_names, root_progress):
+def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_volume=False, skip_warm_site=False):
     with root_progress.start_sub(__spec__.name, 'add_clear_workers') as progress:
         print("Adding and clearing workers")
         cluster_zone = common.get_cluster_zone()
@@ -138,11 +138,33 @@ def add_clear_workers(servers, prepare_domain_names, root_progress):
                 domain_name = get_domain_name_from_num(eu_load_test_domain_num)
                 prepare_domain_names.add(domain_name)
         for domain_name in prepare_domain_names:
-            add_clear_worker(domain_name, node_ip, cluster_zone, root_progress)
+            with progress.set_start_end('worker_delete_start_{}'.format(domain_name), 'worker_delete_end_{}'.format(domain_name)):
+                worker.delete(domain_name)
+        for domain_name in prepare_domain_names:
+            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(domain_name), 'dummy_api_add_example_site_end_{}'.format(domain_name)):
+                dummy_api.add_example_site(domain_name, domain_name, cluster_zone)
+        for domain_name in prepare_domain_names:
+            volume_id = domain_name.replace('.', '--')
+            with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
+                worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
+        if not skip_warm_site:
+            for domain_name in prepare_domain_names:
+                with progress.set_start_end('assert_site_start_{}'.format(domain_name), 'assert_site_end_{}'.format(domain_name)):
+                    ok = False
+                    for try_num in range(3):
+                        try:
+                            pprint(common.assert_site(domain_name, node_ip))
+                            ok = True
+                            break
+                        except Exception:
+                            traceback.print_exc()
+                            print("Failed to assert_site, will retry up to 3 times")
+                            time.sleep(5)
+                    assert ok, "Failed to assert_site 3 times, giving up"
 
 
-def prepare_custom_load_generator(servers, prepare_domain_names, root_progress):
-    with root_progress.start_sub(__spec__.name, 'run_distributed_load_tests') as progress:
+def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket):
+    with root_progress.start_sub(__spec__.name, 'prepare_custom_load_generator') as progress:
         domain_name_servers = {}
         objects, duration_seconds, concurrency, obj_size_kb = None, None, None, None
         for server_num, server in servers.items():
@@ -167,21 +189,23 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress):
                     domain_name = get_domain_name_from_num(server_num if server_num < 5 else 1)
                     domain_name_servers.setdefault(domain_name, []).append(server)
         if prepare_domain_names:
-            print("preparing custom load generator using the same bucket for all domain names / servers")
-            bucket_name = str(uuid.uuid4())
+            assert use_default_bucket
+            print("preparing custom load generator using the default bucket for all domain names / servers")
             for domain_name in prepare_domain_names:
                 print("domain_name={}".format(domain_name))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
-                    prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb, bucket_name=bucket_name)
+                    prepare_default_bucket('https', domain_name, objects, obj_size_kb, with_delete=True)
             for server in servers.values():
-                server['custom_load_options']['bucket_name'] = bucket_name
+                server['custom_load_options']['use_default_bucket'] = True
         else:
+            assert not use_default_bucket
             for domain_name in domain_name_servers.keys():
                 print("preparing custom load generator for domain_name {}".format(domain_name))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
                     bucket_name = prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb)
                 for server in domain_name_servers[domain_name]:
                     server['custom_load_options']['bucket_name'] = bucket_name
+                    server['custom_load_options']['use_default_bucket'] = False
 
 
 def post_delete_cleanup(servers, create_servers_stats):
@@ -210,11 +234,18 @@ def post_delete_cleanup(servers, create_servers_stats):
 #             create_servers_stats["post_delete_failed"] = True
 
 
-def run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress):
+def run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options):
     with root_progress.start_sub(__spec__.name, 'run_distributed_load_tests') as progress:
-        add_clear_workers(servers, prepare_domain_names, root_progress)
+        add_clear_workers(servers, prepare_domain_names, root_progress,
+                          skip_clear_volume=custom_load_options.get('skip_clear_volume', load_generator == 'custom'),
+                          skip_warm_site=custom_load_options.get('skip_warm_site', False))
         if load_generator == 'custom':
-            prepare_custom_load_generator(servers, prepare_domain_names, root_progress)
+            if prepare_domain_names:
+                use_default_bucket = True
+            else:
+                assert not custom_load_options.get('use_default_bucket')
+                use_default_bucket = False
+            prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket)
         create_servers_stats = {}
         with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress) as (tempdir, servers):
             with progress.set_start_end('prepare_remote_servers_start', 'prepare_remote_servers_end'):

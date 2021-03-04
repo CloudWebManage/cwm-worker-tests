@@ -35,7 +35,8 @@ class LoadGeneratorRunCommand(click.Command):
                 click.Option(['--concurrency'], default=6, type=int, show_default=True),
                 click.Option(['--obj-size-kb'], default=10, type=int, show_default=True),
                 click.Option(['--benchdatafilename'], type=str, help="optional file to save with benchdata"),
-                click.Option(['--custom-load-options'], type=str, help="json string or base64 encoded json string prefixed with 'b64:'")
+                click.Option(['--custom-load-options'], type=str, help="json string or base64 encoded json string prefixed with 'b64:'"),
+                click.Option(['--use-default-bucket'], is_flag=True, help="use a default bucket, verify it is valid and prepare only if needed")
             ]
         )
 
