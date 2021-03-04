@@ -190,7 +190,7 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
                 raise
         time.sleep(10)
     print("Uploading {} files, {} kb each".format(objects if only_upload_filenums is None else len(only_upload_filenums), obj_size_kb))
-    filenums_iterator = range(int(objects)) if only_upload_filenums is None else only_upload_filenums
+    filenums_iterator = range(int(objects)) if only_upload_filenums is None else (int(i)-1 for i in only_upload_filenums)
     if delete_keys:
         print("Deleting {} files".format(len(delete_keys)))
 
