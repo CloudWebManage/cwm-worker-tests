@@ -21,7 +21,7 @@ from cwm_worker_tests.distributed_tests import create_servers
 
 
 DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR = '.distributed-load-test-output'
-BUCKET_MAX_SECONDS = [0.1, 0.25, 0.5, 1, 2, 4, 8]
+BUCKET_MAX_SECONDS = [1, 5, 10, 20]
 BUCKET_INF = 'inf'
 
 
