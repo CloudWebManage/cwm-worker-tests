@@ -197,6 +197,7 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                     prepare_default_bucket('https', domain_name, objects, obj_size_kb, with_delete=True)
             for server in servers.values():
                 server['custom_load_options']['use_default_bucket'] = True
+                server['custom_load_options']['skip_prepare_bucket'] = True
         else:
             assert not use_default_bucket
             for domain_name in domain_name_servers.keys():

@@ -272,6 +272,7 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
     assert obj_size_kb > 0, "obj_size argument should be empty for custom load generator"
     if custom_load_options.get('use_default_bucket'):
         use_default_bucket = True
+    skip_prepare_bucket = custom_load_options.get('skip_prepare_bucket')
     bucket_name = custom_load_options.get("bucket_name")
     if bucket_name:
         assert not use_default_bucket, 'cannot use default bucket if you specified a bucket name'
@@ -281,6 +282,7 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         print("Using default bucket: {}".format(bucket_name))
     else:
         assert not custom_load_options.get('random_domain_names'), 'bucket must be pre-prepared when using random domain names'
+        assert not skip_prepare_bucket, 'cannot skip prepare bucket if no bucket_name'
         bucket_name = prepare_custom_bucket(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb)
     if custom_load_options.get('random_domain_names'):
         domain_name_buckets = {
@@ -289,7 +291,7 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         }
     else:
         domain_name_buckets = {domain_name: bucket_name}
-    if use_default_bucket:
+    if use_default_bucket and not skip_prepare_bucket:
         for domain_name in domain_name_buckets.keys():
             prepare_default_bucket(method, domain_name, objects, obj_size_kb)
     print("Starting {} threads of custom load ({})".format(concurrency, method))
