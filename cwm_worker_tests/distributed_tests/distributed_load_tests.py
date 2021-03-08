@@ -98,7 +98,7 @@ def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress, skip_cle
         if not cluster_zone:
             cluster_zone = common.get_cluster_zone()
         with progress.set_start_end('dummy_api_add_example_site_start', 'dummy_api_add_example_site_end'):
-            dummy_api.add_example_site(domain_name, domain_name, cluster_zone)
+            dummy_api.add_example_site(domain_name, domain_name, cluster_zone, disable_force_delete=True, disable_force_update=True)
         volume_id = domain_name.replace('.', '--')
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
             worker.delete(domain_name)
@@ -142,7 +142,7 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
                 worker.delete(domain_name)
         for domain_name in prepare_domain_names:
             with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(domain_name), 'dummy_api_add_example_site_end_{}'.format(domain_name)):
-                dummy_api.add_example_site(domain_name, domain_name, cluster_zone)
+                dummy_api.add_example_site(domain_name, domain_name, cluster_zone, disable_force_delete=True, disable_force_update=True)
         for domain_name in prepare_domain_names:
             volume_id = domain_name.replace('.', '--')
             with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
