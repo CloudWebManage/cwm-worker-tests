@@ -248,17 +248,25 @@ def post_delete_cleanup(servers, create_servers_stats):
 
 
 def run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options):
+    skip_add_clear_workers = custom_load_options.get('skip_add_clear_workers')
+    skip_prepare_load_generator = custom_load_options.get('skip_prepare_load_generator')
     with root_progress.start_sub(__spec__.name, 'run_distributed_load_tests') as progress:
-        add_clear_workers(servers, prepare_domain_names, root_progress,
-                          skip_clear_volume=custom_load_options.get('skip_clear_volume', load_generator == 'custom'),
-                          skip_warm_site=custom_load_options.get('skip_warm_site', False))
-        if load_generator == 'custom':
-            if prepare_domain_names:
-                use_default_bucket = True
-            else:
-                assert not custom_load_options.get('use_default_bucket')
-                use_default_bucket = False
-            prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket)
+        if skip_add_clear_workers:
+            print("Skipping add clear workers")
+        else:
+            add_clear_workers(servers, prepare_domain_names, root_progress,
+                              skip_clear_volume=custom_load_options.get('skip_clear_volume', load_generator == 'custom'),
+                              skip_warm_site=custom_load_options.get('skip_warm_site', False))
+        if skip_prepare_load_generator:
+            print("Skipping prepare load generators")
+        else:
+            if load_generator == 'custom':
+                if prepare_domain_names:
+                    use_default_bucket = True
+                else:
+                    assert not custom_load_options.get('use_default_bucket')
+                    use_default_bucket = False
+                prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket)
         create_servers_stats = {}
         with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress) as (tempdir, servers):
             with progress.set_start_end('prepare_remote_servers_start', 'prepare_remote_servers_end'):

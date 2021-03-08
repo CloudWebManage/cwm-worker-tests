@@ -8,7 +8,7 @@ from cwm_worker_cluster import config
 import cwm_worker_tests.distributed_load_test
 
 
-def run_test(testnum, test, dry_run):
+def run_test(testnum, test, dry_run, skip_add_clear_prepare=False):
     kwargs = dict(
         objects=test.get('objects', 10), duration_seconds=test.get('duration_seconds', 10),
         concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
@@ -17,13 +17,48 @@ def run_test(testnum, test, dry_run):
         base_servers_all_eu=test.get('base_servers_all_eu', True),
         only_test_method=test.get('only_test_method'),
         load_generator=test.get('load_generator', 'warp'),
-        custom_load_options=test.get('custom_load_options', {}),
+        custom_load_options={
+            **test.get('custom_load_options', {}),
+            **(
+                {
+                   "skip_add_clear_workers": True, "skip_prepare_load_generator": True
+                } if skip_add_clear_prepare else {}
+            )
+        },
         with_deploy=True if testnum == 1 else False
     )
     if dry_run:
         pprint(kwargs)
     else:
         cwm_worker_tests.distributed_load_test.main(**kwargs)
+
+
+def check_skip_add_clear_prepare(tests, testnum):
+    if testnum == 1:
+        print("test {} is the first test, will not skip add clear prepare".format(testnum))
+        return False
+    cur_test = tests[testnum]
+    prev_test = tests[testnum-1]
+    if prev_test.get('objects', 10) != cur_test.get('objects', 10):
+        print("test {} has different objects than last test, will not skip add clear prepare".format(testnum))
+        return False
+    if prev_test.get('obj_size_kb', 10) != cur_test.get('obj_size_kb', 10):
+        print("test {} has different obj_size_kb than last test, will not skip add clear prepare".format(testnum))
+        return False
+    if prev_test.get('load_generator', 'warp') != cur_test.get('load_generator', 'warp'):
+        print("test {} has different load_generator than last test, will not skip add clear prepare".format(testnum))
+        return False
+    if not cur_test.get('custom_load_options', {}).get('number_of_random_domain_names'):
+        print("test {} does not have number_of_random_domain_names, will not skip add clear prepare".format(testnum))
+        return False
+    if not prev_test.get('custom_load_options', {}).get('number_of_random_domain_names'):
+        print("previous test of {} does not have number_of_random_domain_names, will not skip add clear prepare".format(testnum))
+        return False
+    if cur_test['custom_load_options']['number_of_random_domain_names'] != prev_test['custom_load_options']['number_of_random_domain_names']:
+        print("test {} has different number_of_random_domain_names than last test, will not skip add clear prepare".format(testnum))
+        return False
+    print("test {} qualifies for skipping add clear prepare".format(testnum))
+    return True
 
 
 def main(tests_config):
@@ -51,7 +86,7 @@ def main(tests_config):
         pprint(test)
         ok = results[i]['ok'] = True
         try:
-            run_test(i, test, dry_run)
+            run_test(i, test, dry_run, check_skip_add_clear_prepare(tests, i))
         except:
             traceback.print_exc()
             ok = results[i]['ok'] = False
