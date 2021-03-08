@@ -34,11 +34,15 @@ def run_test(testnum, test, dry_run, skip_add_clear_prepare=False):
 
 
 def check_skip_add_clear_prepare(tests, testnum):
+    cur_test = tests[testnum-1]
     if testnum == 1:
-        print("test {} is the first test, will not skip add clear prepare".format(testnum))
-        return False
-    cur_test = tests[testnum]
-    prev_test = tests[testnum-1]
+        if cur_test.get('allow_skip_add_clear_prepare_first_test'):
+            print("skipping add clear prepare even though it's the first test because allow_skip_add_clear_prepare_first_test is true")
+            return True
+        else:
+            print("test {} is the first test, will not skip add clear prepare".format(testnum))
+            return False
+    prev_test = tests[testnum-2]
     if prev_test.get('objects', 10) != cur_test.get('objects', 10):
         print("test {} has different objects than last test, will not skip add clear prepare".format(testnum))
         return False

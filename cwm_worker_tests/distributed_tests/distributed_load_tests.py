@@ -163,7 +163,7 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
                     assert ok, "Failed to assert_site 3 times, giving up"
 
 
-def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket):
+def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator=False):
     with root_progress.start_sub(__spec__.name, 'prepare_custom_load_generator') as progress:
         domain_name_servers = {}
         objects, duration_seconds, concurrency, obj_size_kb = None, None, None, None
@@ -191,13 +191,16 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
         if prepare_domain_names:
             assert use_default_bucket
             print("preparing custom load generator using the default bucket for all domain names / servers")
+            if skip_prepare_load_generator:
+                print("Skipping actual prepare task because skip_prepare_load_generator=True")
             for domain_name in prepare_domain_names:
                 print("domain_name={}".format(domain_name))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
                     ok, i = False, 1
                     while not ok:
                         try:
-                            prepare_default_bucket('https', domain_name, objects, obj_size_kb, with_delete=True)
+                            if not skip_prepare_load_generator:
+                                prepare_default_bucket('https', domain_name, objects, obj_size_kb, with_delete=True)
                             ok = True
                         except:
                             traceback.print_exc()
@@ -214,6 +217,7 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
             assert not use_default_bucket
             for domain_name in domain_name_servers.keys():
                 print("preparing custom load generator for domain_name {}".format(domain_name))
+                assert not skip_prepare_load_generator, "Cannot skip_prepare_load_generator when not using default bucket"
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
                     bucket_name = prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb)
                 for server in domain_name_servers[domain_name]:
@@ -257,16 +261,13 @@ def run_distributed_load_tests(servers, load_generator, prepare_domain_names, ro
             add_clear_workers(servers, prepare_domain_names, root_progress,
                               skip_clear_volume=custom_load_options.get('skip_clear_volume', load_generator == 'custom'),
                               skip_warm_site=custom_load_options.get('skip_warm_site', False))
-        if skip_prepare_load_generator:
-            print("Skipping prepare load generators")
-        else:
-            if load_generator == 'custom':
-                if prepare_domain_names:
-                    use_default_bucket = True
-                else:
-                    assert not custom_load_options.get('use_default_bucket')
-                    use_default_bucket = False
-                prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket)
+        if load_generator == 'custom':
+            if prepare_domain_names:
+                use_default_bucket = True
+            else:
+                assert not custom_load_options.get('use_default_bucket')
+                use_default_bucket = False
+            prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator)
         create_servers_stats = {}
         with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress) as (tempdir, servers):
             with progress.set_start_end('prepare_remote_servers_start', 'prepare_remote_servers_end'):
