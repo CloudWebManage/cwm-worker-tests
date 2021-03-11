@@ -73,6 +73,13 @@ def build_test_docker_image(tempdir, name, ip):
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(ip, tempdir)
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
     cwm_worker_cluster_path = '.' if os.path.exists('./clusters') else '../cwm-worker-cluster'
+    ret, out = subprocess.getstatusoutput('{ssh} "df --output=pcent /"'.format(ssh=ssh))
+    assert ret == 0, out
+    disk_space_used_percent = int(out.strip().split("\n")[-1].strip().replace('%', ''))
+    if disk_space_used_percent > 60:
+        print("Used disk space is more than 60%, running docker system prune")
+        ret, out = subprocess.getstatusoutput('{ssh} "docker system prune --force"'.format(ssh=ssh))
+        assert ret == 0, out
     ret, out = subprocess.getstatusoutput('''
                             {ssh} "rm -rf /root/cwm-worker-cluster" &&\
                             {ssh} "mkdir /root/cwm-worker-cluster" &&\
