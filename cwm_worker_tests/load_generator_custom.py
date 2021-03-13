@@ -163,10 +163,19 @@ class RunCustomThread(Thread):
         self.stats['elapsed_seconds'] = (datetime.datetime.now() - start_time).total_seconds()
 
 
-def get_s3_resource(method, domain_name, with_retries=False):
-    retry_max_attempts = 10 if with_retries else 0
-    return boto3.resource('s3', **config.get_deployment_s3_resource_kwargs(method, domain_name),
-                          config=Config(signature_version='s3v4', retries={'max_attempts': retry_max_attempts, 'mode': 'standard'}))
+def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=None, connect_timeout=15, read_timeout=60):
+    if retry_max_attempts is None:
+        retry_max_attempts = 10 if with_retries else 0
+    else:
+        assert with_retries, 'must set with_retries=True if you set retry_max_attempts'
+    return boto3.resource(
+        's3', **config.get_deployment_s3_resource_kwargs(method, domain_name),
+        config=Config(
+            signature_version='s3v4',
+            retries={'max_attempts': retry_max_attempts, 'mode': 'standard'},
+            connect_timeout=connect_timeout, read_timeout=read_timeout
+        )
+    )
 
 
 def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
