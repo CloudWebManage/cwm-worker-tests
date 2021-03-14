@@ -137,7 +137,10 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
             for eu_load_test_domain_num in eu_load_test_domain_nums:
                 domain_name = get_domain_name_from_num(eu_load_test_domain_num)
                 prepare_domain_names.add(domain_name)
-        for domain_name in prepare_domain_names:
+        delete_domain_names = set(prepare_domain_names)
+        for i in range(1, 50):
+            delete_domain_names.add(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(i))
+        for domain_name in delete_domain_names:
             with progress.set_start_end('worker_delete_start_{}'.format(domain_name), 'worker_delete_end_{}'.format(domain_name)):
                 worker.delete(domain_name)
         for domain_name in prepare_domain_names:
