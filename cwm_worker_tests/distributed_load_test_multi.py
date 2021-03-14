@@ -6,6 +6,7 @@ from pprint import pprint
 
 from cwm_worker_cluster import config
 import cwm_worker_tests.distributed_load_test
+from cwm_worker_tests.multi_dict_generator import multi_dict_generator
 
 
 def run_test(testnum, test, dry_run, skip_add_clear_prepare=False):
@@ -64,21 +65,43 @@ def check_skip_add_clear_prepare(tests, testnum):
     return True
 
 
+def parse_multi_tests_custom_load_options(custom_load_options, tests):
+    new_tests = []
+    for test in tests:
+        test['custom_load_options'] = {**custom_load_options}
+        for key in ['number_of_random_domain_names', 'make_put_or_del_every_iterations']:
+            value = test.pop(key, None)
+            if value is not None:
+                test['custom_load_options'] = {**test['custom_load_options'], key: value}
+        new_tests.append(test)
+    return new_tests
+
+
+def get_multi_tests(tests, defaults, multi_values, custom_load_options):
+    return parse_multi_tests_custom_load_options(custom_load_options, multi_dict_generator(defaults, multi_values, tests))
+
+
 def main(tests_config):
     tests = tests_config['tests']
     dry_run = tests_config.get('dry_run', False)
-    defaults = tests_config.get('defaults', None)
+    defaults = tests_config.get('defaults', {})
     stop_on_error = tests_config.get('stop_on_error', True)
-    print("Running multiple tests ({})".format(len(tests)))
-    if not defaults:
-        defaults = {}
-    pprint({"dry_run": dry_run, "defaults": defaults})
+    multi_values = tests_config.get('multi_values', {})
+    custom_load_options = tests_config.get('custom_load_options', {})
+    print("Running multiple tests")
+    pprint({"dry_run": dry_run,
+            "defaults": defaults,
+            "multi_values": multi_values,
+            "custom_load_options": custom_load_options,
+            "stop_on_error": stop_on_error,
+            "tests": tests})
+    tests = get_multi_tests(tests, defaults, multi_values, custom_load_options)
+    print("Number of multi-tests: {}".format(len(tests)))
     multi_path_root = ".distributed-load-test-multi"
     shutil.rmtree(multi_path_root, ignore_errors=True)
     os.mkdir(multi_path_root)
     results = {}
     for i, test in enumerate(tests, 1):
-        test = {**defaults, **test}
         results[i] = {}
         test_path = os.path.join(".distributed-load-test-multi", str(i))
         os.mkdir(test_path)
@@ -86,7 +109,6 @@ def main(tests_config):
             json.dump({**test, **config.get_distributed_load_tests_global_env_vars()}, f)
         shutil.rmtree(".distributed-load-test-output", ignore_errors=True)
         print("Multi test #{}".format(i))
-        pprint(test)
         ok = results[i]['ok'] = True
         try:
             run_test(i, test, dry_run, check_skip_add_clear_prepare(tests, i))

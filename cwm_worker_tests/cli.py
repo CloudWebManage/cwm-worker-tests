@@ -88,22 +88,40 @@ def distributed_load_test_multi(tests_config):
     TESTS_CONFIG keys:
 
     defaults - default values for all tests (correspond to distributed load test arguments)
+    multi_values - keys to fill with multiple values from lists
     tests - list of objects, each object is a test which will run with args to override in the defaults for this test
+    custom_load_options - custom load options to apply to all tests
     dry_run - boolean
     stop_on_error - boolean (default=true)
 
     example tests_config with all defaults:
     {
         "defaults": {
-            "objects": 10, "duration_seconds": 10, "concurrency": 6, "obj_size_kb": 10, "num_extra_eu_servers": 0,
-            "num_base_servers": 4, "base_servers_all_eu": true, "only_test_method": null, "load_generator": "warp",
-            "custom_load_options": {}
+            "force_skip_add_clear_prepare": true,
+            "objects": 100,
+            "duration_seconds": 600,
+            "obj_size_kb": 100,
+            "num_base_servers": 4,
+            "base_servers_all_eu": true,
+            "only_test_method": null,
+            "load_generator": "custom",
+            "concurrency": 1,
+            "num_extra_eu_servers": 4,
+            "number_of_random_domain_names": 10,
+            "make_put_or_del_every_iterations": 1000
+        },
+        "multi_values": {
+            "concurrency": [1,5],
+            "num_extra_eu_servers": [1,4],
+            "number_of_random_domain_names": [10, 25, 50]
         },
         "tests": [
-            {"objects": 20},
-            {"concurrency": 20}
+            {"obj_size_kb": 100, "make_put_or_del_every_iterations": 1000},
+            {"obj_size_kb": 1000, "make_put_or_del_every_iterations": 5000},
+            {"obj_size_kb": 10000, "make_put_or_del_every_iterations": 20000}
         ],
-        "dry_run": false,
+        "custom_load_options": {},
+        "dry_run": true,
         "stop_on_error": true
     }
     """
