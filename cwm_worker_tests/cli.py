@@ -93,11 +93,14 @@ def distributed_load_test_multi(tests_config):
     custom_load_options - custom load options to apply to all tests
     dry_run - boolean
     stop_on_error - boolean (default=true)
+    add_clear_workers - none - will determine based on test values, skip - will skip for all tests, force = will force for all tests
+    prepare_load_generator - none - will determine based on test values, skip - will skip for all tests, force = will force for all tests
 
     example tests_config with all defaults:
     {
         "defaults": {
-            "force_skip_add_clear_prepare": true,
+            "add_clear_workers": null,
+            "prepare_load_generator": null,
             "objects": 100,
             "duration_seconds": 600,
             "obj_size_kb": 100,
