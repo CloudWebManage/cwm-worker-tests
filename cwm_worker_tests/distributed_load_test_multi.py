@@ -1,6 +1,7 @@
 import os
 import json
 import shutil
+import datetime
 import traceback
 from glob import glob
 from pprint import pprint
@@ -152,50 +153,72 @@ def aggregate_multi_test_stats():
             'bench_data_stats_package': get_from_path_parts(testpath, 'output', 'warp_bench_data_stats', 'datapackage.json'),
             'bench_data_errors_package': get_from_path_parts(testpath, 'output', 'warp_bench_data_errors', 'datapackage.json'),
         }
-        totals_row = None
-        proto_sums = {'http': defaultdict(int), 'https': defaultdict(int)}
-        proto_counts = {'http': 0, 'https': 0}
-        endpoint_total_error_percent_buckets = {bucket: 0 for bucket in error_percent_buckets}
-        for row in DF.Flow(DF.load(test['bench_data_stats_package'])).results()[0][0]:
-            if row['endpoint'] == '*' or row['datacenter'] == '*':
-                assert not totals_row
-                totals_row = row
-                proto = None
-            elif row['endpoint'].startswith('https://'):
-                proto = 'https'
-            elif row['endpoint'].startswith('http://'):
-                proto = 'http'
-            else:
-                raise Exception("Invalid endpoint: {}".format(row['endpoint']))
-            if proto is not None:
-                proto_counts[proto] += 1
-                for key in ['total-percent-errors', 'total-successful-requests-per-second', 'total-megabytes-per-second']:
-                    proto_sums[proto][key] += row[key]
-                for bucket in sorted(endpoint_total_error_percent_buckets.keys()):
-                    if row['total-percent-errors'] <= bucket:
-                        endpoint_total_error_percent_buckets[bucket] += 1
-                        break
-        assert totals_row
+        if test['bench_data_stats_package']:
+            totals_row = None
+            try:
+                proto_sums = {'http': defaultdict(int), 'https': defaultdict(int)}
+                proto_counts = {'http': 0, 'https': 0}
+                endpoint_total_error_percent_buckets = {bucket: 0 for bucket in error_percent_buckets}
+                for row in DF.Flow(DF.load(test['bench_data_stats_package'])).results()[0][0]:
+                    if row['endpoint'] == '*' or row['datacenter'] == '*':
+                        assert not totals_row
+                        totals_row = row
+                        proto = None
+                    elif row['endpoint'].startswith('https://'):
+                        proto = 'https'
+                    elif row['endpoint'].startswith('http://'):
+                        proto = 'http'
+                    else:
+                        raise Exception("Invalid endpoint: {}".format(row['endpoint']))
+                    if proto is not None:
+                        proto_counts[proto] += 1
+                        for key in ['total-percent-errors', 'total-successful-requests-per-second', 'total-megabytes-per-second']:
+                            proto_sums[proto][key] += row[key]
+                        for bucket in sorted(endpoint_total_error_percent_buckets.keys()):
+                            if row['total-percent-errors'] <= bucket:
+                                endpoint_total_error_percent_buckets[bucket] += 1
+                                break
+                assert totals_row
+                for proto in ['http', 'https']:
+                    for key, value in proto_sums[proto].items():
+                        totals_row['{}-avg-{}'.format(proto, key)] = value / proto_counts[proto]
+                for bucket in endpoint_total_error_percent_buckets.keys():
+                    totals_row['endpoints_error_percent_{}'.format(bucket)] = endpoint_total_error_percent_buckets[bucket]
+                totals_row['result'] = test['result']
+            except Exception as e:
+                print("Exception processing testnum {}".format(testnum))
+                traceback.print_exc()
+                if not totals_row:
+                    totals_row = {
+                        '__has_error__': True,
+                        'result': False,
+                        'error': 'unexpected exception: {}'.format(e)
+                    }
+        else:
+            totals_row = {
+                '__has_error__': True,
+                'result': False,
+                'error': 'missing bench_data_stats package'
+            }
         test['totals_row'] = totals_row
-        for proto in ['http', 'https']:
-            for key, value in proto_sums[proto].items():
-                totals_row['{}-avg-{}'.format(proto, key)] = value / proto_counts[proto]
         totals_row['testnum'] = testnum
-        totals_row['result'] = test['result']
         for key in ["objects", "duration_seconds", "concurrency", "obj_size_kb", "only_test_method", "load_generator", "force_skip_add_clear_prepare"]:
             totals_row[key] = (test['test'].get(key) or '')
         totals_row['num_load_servers'] = (test['test'].get('num_extra_eu_servers') or 0) + (test['test'].get('num_base_servers') or 0)
         totals_row['num_domain_names'] = test['test'].get('custom_load_options', {}).get('number_of_random_domain_names', 0)
         totals_row['make_put_or_del_every_iterations'] = test['test'].get('custom_load_options', {}).get('make_put_or_del_every_iterations', 0)
-        for bucket in endpoint_total_error_percent_buckets.keys():
-            totals_row['endpoints_error_percent_{}'.format(bucket)] = endpoint_total_error_percent_buckets[bucket]
+        totals_row['start'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('start_load_tests_start')
+        totals_row['end'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('finalize_load_tests_end')
+        start_ts = str(int(datetime.datetime.strptime(totals_row['start'], '%Y-%m-%dT%H:%M:%S').timestamp() * 1000)) if totals_row['start'] else ''
+        end_ts = str(int(datetime.datetime.strptime(totals_row['end'], '%Y-%m-%dT%H:%M:%S').timestamp() * 1000)) if totals_row['end'] else ''
+        totals_row['grafana'] = config.LOAD_TESTING_GRAFANA_DASHBOARD_URL_TEMPLATE.format(start_ts=start_ts, end_ts=end_ts)
 
     def totals_rows():
-        for testnum in sorted(tests.keys()):
+        for testnum in list(sorted([k for k, v in tests.items() if not v.get('__has_error__')])) + list(sorted([k for k, v in tests.items() if v.get('__has_error__')])):
             r = tests[testnum]['totals_row']
             yield {
-                **{k: r.pop(k) for k in [
-                    'testnum', 'result',
+                **{k: r.get(k, '') for k in [
+                    'testnum', 'result', 'error', 'start', 'end', 'grafana',
                     "objects", "duration_seconds", "concurrency", "obj_size_kb", "only_test_method", "load_generator", "force_skip_add_clear_prepare",
                     'num_load_servers', 'num_domain_names', 'make_put_or_del_every_iterations',
                     'total-percent-errors', 'total-successful-requests-per-second', 'total-megabytes-per-second',

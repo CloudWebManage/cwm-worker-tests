@@ -12,11 +12,17 @@ def multi_dict_generator(defaults, multi_values, objs):
         validate_obj('objs #{}'.format(i), obj)
     for k, values in multi_values.items():
         assert isinstance(values, list), 'invalid multi values for key {}: {}'.format(k, values)
-    for key, values in multi_values.items():
+    if len(multi_values) > 0:
+        for key, values in multi_values.items():
+            new_objs = []
+            for value in values:
+                for obj in objs:
+                    new_objs.append({**defaults, **obj, key: value})
+            objs = new_objs
+    else:
         new_objs = []
-        for value in values:
-            for obj in objs:
-                new_objs.append({**defaults, **obj, key: value})
+        for obj in objs:
+            new_objs.append({**defaults, **obj})
         objs = new_objs
     return objs
 
