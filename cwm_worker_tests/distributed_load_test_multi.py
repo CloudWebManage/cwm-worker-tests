@@ -1,5 +1,6 @@
 import os
 import json
+import pytz
 import shutil
 import datetime
 import traceback
@@ -209,8 +210,8 @@ def aggregate_multi_test_stats():
         totals_row['make_put_or_del_every_iterations'] = test['test'].get('custom_load_options', {}).get('make_put_or_del_every_iterations', 0)
         totals_row['start'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('start_load_tests_start')
         totals_row['end'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('finalize_load_tests_end')
-        start_ts = str(int(datetime.datetime.strptime(totals_row['start'], '%Y-%m-%dT%H:%M:%S').timestamp() * 1000)) if totals_row['start'] else ''
-        end_ts = str(int(datetime.datetime.strptime(totals_row['end'], '%Y-%m-%dT%H:%M:%S').timestamp() * 1000)) if totals_row['end'] else ''
+        start_ts = str(int(datetime.datetime.strptime(totals_row['start'], '%Y-%m-%dT%H:%M:%S').astimezone(pytz.timezone('Israel')).timestamp() * 1000)) if totals_row['start'] else ''
+        end_ts = str(int(datetime.datetime.strptime(totals_row['end'], '%Y-%m-%dT%H:%M:%S').astimezone(pytz.timezone('Israel')).timestamp() * 1000)) if totals_row['end'] else ''
         totals_row['grafana'] = config.LOAD_TESTING_GRAFANA_DASHBOARD_URL_TEMPLATE.format(start_ts=start_ts, end_ts=end_ts)
 
     def totals_rows():
