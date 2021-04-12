@@ -438,44 +438,49 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
 
     def aggregate_stats(row):
         endpoint = row['endpoint']
-        op = row['op']
-        error = row['error']
-        bytes = int(row['bytes'])
-        duration_ns = int(row['duration_ns'])
-        first_byte = row['first_byte']
-        end = row['end']
-        duration_after_first_byte_ns = get_duration_ns(first_byte, end)
-        assert duration_after_first_byte_ns >= 0, row
-        assert '~' not in endpoint
-        assert '~' not in op
-        key_prefix = '{}~{}'.format(endpoint, op)
-        if error:
-            stats['{}~errors'.format(key_prefix)] += 1
-        else:
-            stats['{}~successful-requests'.format(key_prefix)] += 1
-            stats['{}~bytes'.format(key_prefix)] += bytes
-            stats['{}~duration_ns'.format(key_prefix)] += duration_ns
-            stats['{}~duration_after_first_byte_ns'.format(key_prefix)] += duration_after_first_byte_ns
-            if duration_ns > stats['{}~max-duration_ns'.format(key_prefix)]:
-                stats['{}~max-duration_ns'.format(key_prefix)] = duration_ns
-            if stats['{}~min-duration_ns'.format(key_prefix)] == 0 or duration_ns < stats['{}~min-duration_ns'.format(key_prefix)]:
-                stats['{}~min-duration_ns'.format(key_prefix)] = duration_ns
-            duration_seconds = duration_ns / 1000000000
-            bucket = None
-            for bucket_max_seconds in BUCKET_MAX_SECONDS:
-                if duration_seconds <= bucket_max_seconds:
-                    bucket = bucket_max_seconds
-                    break
-            if not bucket:
-                bucket = BUCKET_INF
-            stats['{}~request-duration-{}'.format(key_prefix, bucket)] += 1
+        try:
+            op = row['op']
+            error = row['error']
+            bytes = int(row['bytes'])
+            duration_ns = int(row['duration_ns'])
+            first_byte = row['first_byte']
+            end = row['end']
+            duration_after_first_byte_ns = get_duration_ns(first_byte, end)
+            assert duration_after_first_byte_ns >= 0, row
+            assert '~' not in endpoint
+            assert '~' not in op
+            key_prefix = '{}~{}'.format(endpoint, op)
+            if error:
+                stats['{}~errors'.format(key_prefix)] += 1
+            else:
+                stats['{}~successful-requests'.format(key_prefix)] += 1
+                stats['{}~bytes'.format(key_prefix)] += bytes
+                stats['{}~duration_ns'.format(key_prefix)] += duration_ns
+                stats['{}~duration_after_first_byte_ns'.format(key_prefix)] += duration_after_first_byte_ns
+                if duration_ns > stats['{}~max-duration_ns'.format(key_prefix)]:
+                    stats['{}~max-duration_ns'.format(key_prefix)] = duration_ns
+                if stats['{}~min-duration_ns'.format(key_prefix)] == 0 or duration_ns < stats['{}~min-duration_ns'.format(key_prefix)]:
+                    stats['{}~min-duration_ns'.format(key_prefix)] = duration_ns
+                duration_seconds = duration_ns / 1000000000
+                bucket = None
+                for bucket_max_seconds in BUCKET_MAX_SECONDS:
+                    if duration_seconds <= bucket_max_seconds:
+                        bucket = bucket_max_seconds
+                        break
+                if not bucket:
+                    bucket = BUCKET_INF
+                stats['{}~request-duration-{}'.format(key_prefix, bucket)] += 1
+        except:
+            print("Exception in res {} endpoint {}".format(row['source_resource_name'], endpoint))
+            raise
 
     def aggregate_errors(rows):
         for row in rows:
             if row['error'] and len(row['error']) > 0:
                 yield row
 
-    concatenate_step = DF.concatenate({"op": [],
+    concatenate_step = DF.concatenate({"source_resource_name": [],
+                                       "op": [],
                                        "bytes": [],
                                        "endpoint": [],
                                        "file": [],
@@ -486,8 +491,14 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                                        "duration_ns": []},
                                       {"name": "warp_bench_data", "path": "data/warp_bench_data.csv"})
 
+    def add_source_resource_name_step(rows):
+        for row in rows:
+            row['source_resource_name'] = rows.res.name
+            yield row
+
     DF.Flow(
         *load_steps,
+        add_source_resource_name_step,
         concatenate_step,
         aggregate_stats,
         DF.dump_to_path(os.path.join(DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR, 'warp_bench_data'))

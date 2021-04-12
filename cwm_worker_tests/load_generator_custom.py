@@ -1,6 +1,7 @@
 import uuid
 import time
 import random
+import timeit
 import urllib3
 import datetime
 import contextlib
@@ -21,6 +22,19 @@ urllib3.disable_warnings()
 
 
 DEFAULT_BUCKET_NAME = 'cwmwtlgcustomdefault'
+
+
+@contextlib.contextmanager
+def get_start_end_duration_ns():
+    res = {}
+    start_datetime = datetime.datetime.now()
+    start_monotonic = time.monotonic()
+    yield res
+    duration_seconds = time.monotonic() - start_monotonic
+    res['duration_ns'] = duration_seconds * 1000000000
+    assert res['duration_ns'] >= 0
+    res['start_time'] = start_datetime
+    res['end_time'] = start_datetime + datetime.timedelta(seconds=duration_seconds)
 
 
 class RunCustomThread(Thread):
@@ -58,14 +72,13 @@ class RunCustomThread(Thread):
                 self.domain_name_buckets_cache[domain_name] = bucket
             return bucket
 
-
-    def write_benchdata(self, op, bytes, file, error, start_time, end_time, domain_name):
+    def write_benchdata(self, op, bytes, file, error, start_end_duration, domain_name):
         file = file.replace(',', '_') if file else ''
         error = error.replace(',', '_') if error else ''
         endpoint = '{}://{}'.format(self.method, domain_name)
-        duration_ns = int((end_time - start_time).total_seconds() * 1000000000)
-        start = first_byte = start_time.strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
-        end = end_time.strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+        duration_ns = start_end_duration['duration_ns']
+        start = first_byte = start_end_duration['start_time'].strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+        end = start_end_duration['end_time'].strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
         writearg = ",".join(map(str, [op, bytes if bytes else 0, endpoint, file, error if error else '', start, first_byte, end, duration_ns])) + "\n"
         if self.benchdatafile:
             self.benchdatafile.write(writearg)
@@ -73,55 +86,51 @@ class RunCustomThread(Thread):
     def make_head_request(self, object, domain_name):
         self.stats['num_head_requests'] += 1
         head_request_error = None
-        head_request_start = datetime.datetime.now()
-        try:
-            object.load()
-        except Exception as e:
-            head_request_error = str(e)
-        head_request_end = datetime.datetime.now()
+        with get_start_end_duration_ns() as start_end_duration:
+            try:
+                object.load()
+            except Exception as e:
+                head_request_error = str(e)
         if not head_request_error:
             if object.content_length != self.obj_size_kb * 1024:
                 head_request_error = "invalid content length"
-        self.write_benchdata('STAT', 0, object.key, head_request_error, head_request_start, head_request_end, domain_name)
+        self.write_benchdata('STAT', 0, object.key, head_request_error, start_end_duration, domain_name)
         return not head_request_error
 
     def make_get_request(self, object, domain_name):
         self.stats['num_get_requests'] += 1
         get_request_error = None
-        get_request_start = datetime.datetime.now()
-        try:
-            obj_size = len(object.get()['Body'].read())
-        except Exception as e:
-            get_request_error = str(e)
-        get_request_end = datetime.datetime.now()
+        with get_start_end_duration_ns() as start_end_duration:
+            try:
+                obj_size = len(object.get()['Body'].read())
+            except Exception as e:
+                get_request_error = str(e)
         if not get_request_error:
             if obj_size != self.obj_size_kb * 1024:
                 get_request_error = "invalid object size"
-        self.write_benchdata('GET', self.obj_size_kb * 1024, object.key, get_request_error, get_request_start, get_request_end, domain_name)
+        self.write_benchdata('GET', self.obj_size_kb * 1024, object.key, get_request_error, start_end_duration, domain_name)
         return not get_request_error
 
     def make_del_request(self, key, domain_name):
         self.stats['num_del_requests'] += 1
         del_request_error = None
-        del_request_start = datetime.datetime.now()
-        try:
-            self.get_bucket(domain_name).Object(key).delete()
-        except Exception as e:
-            del_request_error = str(e)
-        del_request_end = datetime.datetime.now()
-        self.write_benchdata('DELETE', 0, key, del_request_error, del_request_start, del_request_end, domain_name)
+        with get_start_end_duration_ns() as start_end_duration:
+            try:
+                self.get_bucket(domain_name).Object(key).delete()
+            except Exception as e:
+                del_request_error = str(e)
+        self.write_benchdata('DELETE', 0, key, del_request_error, start_end_duration, domain_name)
         return not del_request_error
 
     def make_put_request(self, key, domain_name):
         self.stats['num_put_requests'] += 1
         put_request_error = None
-        put_request_start = datetime.datetime.now()
-        try:
-            self.get_bucket(domain_name).put_object(Key=key, Body=random.getrandbits(int(self.obj_size_kb) * 1024 * 8).to_bytes(int(self.obj_size_kb) * 1024, 'little'))
-        except Exception as e:
-            put_request_error = str(e)
-        put_request_end = datetime.datetime.now()
-        self.write_benchdata('PUT', self.obj_size_kb * 1024, key, put_request_error, put_request_start, put_request_end, domain_name)
+        with get_start_end_duration_ns() as start_end_duration:
+            try:
+                self.get_bucket(domain_name).put_object(Key=key, Body=random.getrandbits(int(self.obj_size_kb) * 1024 * 8).to_bytes(int(self.obj_size_kb) * 1024, 'little'))
+            except Exception as e:
+                put_request_error = str(e)
+        self.write_benchdata('PUT', self.obj_size_kb * 1024, key, put_request_error, start_end_duration, domain_name)
         return not put_request_error
 
     def make_put_or_del_request(self):
