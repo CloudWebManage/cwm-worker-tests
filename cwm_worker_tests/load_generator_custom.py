@@ -31,7 +31,7 @@ def get_start_end_duration_ns():
     start_monotonic = time.monotonic()
     yield res
     duration_seconds = time.monotonic() - start_monotonic
-    res['duration_ns'] = duration_seconds * 1000000000
+    res['duration_ns'] = round(duration_seconds * 1000000000)
     assert res['duration_ns'] >= 0
     res['start_time'] = start_datetime
     res['end_time'] = start_datetime + datetime.timedelta(seconds=duration_seconds)
