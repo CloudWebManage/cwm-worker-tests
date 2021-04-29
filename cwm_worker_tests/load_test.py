@@ -71,7 +71,7 @@ def main(objects:int, duration_seconds:int, worker_id:str, hostname:str, skip_de
     if not skip_add_worker:
         cluster_zone = common.get_cluster_zone()
         dummy_api.add_example_site(worker_id, hostname, cluster_zone)
-        volume_id = worker_id.replace('.', '--')
+        volume_id = common.get_namespace_name_from_worker_id(worker_id)
         worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)

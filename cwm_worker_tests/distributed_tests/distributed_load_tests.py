@@ -104,7 +104,7 @@ def add_clear_worker(worker_id, hostname, node_ip, cluster_zone, root_progress, 
             cluster_zone = common.get_cluster_zone()
         with progress.set_start_end('dummy_api_add_example_site_start', 'dummy_api_add_example_site_end'):
             dummy_api.add_example_site(worker_id, hostname, cluster_zone)
-        volume_id = worker_id.replace('.', '--')
+        volume_id = common.get_namespace_name_from_worker_id(worker_id)
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
             worker.delete(worker_id)
         with progress.set_start_end('add_clear_worker_volume_start', 'add_clear_worker_volume_end'):
@@ -153,7 +153,7 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
             with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(worker_id), 'dummy_api_add_example_site_end_{}'.format(worker_id)):
                 dummy_api.add_example_site(worker_id, hostname, cluster_zone)
         for worker_id, hostname in prepare_domain_names.items():
-            volume_id = worker_id.replace('.', '--')
+            volume_id = common.get_namespace_name_from_worker_id(worker_id)
             with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
                 worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
         if not skip_warm_site:
