@@ -27,10 +27,10 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         assert not only_test_method or only_test_method in ['http', 'https']
         assert load_generator in ['warp', 'custom']
         if load_generator == 'custom' and 'random_domain_names' not in custom_load_options:
-            custom_load_options['random_domain_names'] = [
-                config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(i+1)
+            custom_load_options['random_domain_names'] = {
+                config.LOAD_TESTING_DOMAIN_NUM_WORKER_ID_TEMPLATE.format(i+1): config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(i+1)
                 for i in range(int(custom_load_options.get('number_of_random_domain_names', 10)))
-            ]
+            }
         if custom_load_options.get('random_domain_names'):
             assert load_generator == 'custom', 'random domain names is only supported for custom load generator'
             prepare_domain_names = custom_load_options['random_domain_names']

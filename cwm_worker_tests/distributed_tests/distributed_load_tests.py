@@ -29,6 +29,10 @@ def get_domain_name_from_num(domain_num):
     return config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(domain_num if domain_num < 5 else 1)
 
 
+def get_worker_id_from_num(domain_num):
+    return config.LOAD_TESTING_DOMAIN_NUM_WORKER_ID_TEMPLATE.format(domain_num if domain_num < 5 else 1)
+
+
 def prepare_server_for_load_test(tempdir, server_ip):
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
@@ -45,13 +49,14 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
     print("Running {} load tests from server {} load_test_domain_num={} load_generator={}".format(protocol, server_name, load_test_domain_num, load_generator))
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
-    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} --domain-name \\"{domain_name}\\" ' \
+    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} --worker-id {worker_id} --hostname \\"{hostname}\\" ' \
                      '--skip-delete-worker --skip-clear-volume --concurrency {concurrency} --obj-size-kb {obj_size_kb} ' \
                      '--benchdatafilename /output/warp-bench-data --skip_add_worker --protocol {protocol} ' \
                      '--load_generator {load_generator} --custom-load-options {custom_load_options}'.format(
         objects=objects,
         duration_seconds=duration_seconds,
-        domain_name=get_domain_name_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
+        hostname=get_domain_name_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
+        worker_id=get_worker_id_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
         concurrency=concurrency,
         obj_size_kb=obj_size_kb,
         protocol=protocol,
@@ -90,18 +95,18 @@ def copy_load_test_data_from_remote_server(tempdir, server_ip, load_test_domain_
     assert ret == 0, out
 
 
-def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress, skip_clear_volume=False):
-    with root_progress.start_sub(__spec__.name, 'add_clear_worker', domain_name) as progress:
+def add_clear_worker(worker_id, hostname, node_ip, cluster_zone, root_progress, skip_clear_volume=False):
+    with root_progress.start_sub(__spec__.name, 'add_clear_worker', worker_id) as progress:
         if not node_ip:
             node = common.get_cluster_nodes('worker')[0]
             node_ip = node['ip']
         if not cluster_zone:
             cluster_zone = common.get_cluster_zone()
         with progress.set_start_end('dummy_api_add_example_site_start', 'dummy_api_add_example_site_end'):
-            dummy_api.add_example_site(domain_name, domain_name, cluster_zone)
-        volume_id = domain_name.replace('.', '--')
+            dummy_api.add_example_site(worker_id, hostname, cluster_zone)
+        volume_id = worker_id.replace('.', '--')
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
-            worker.delete(domain_name)
+            worker.delete(worker_id)
         with progress.set_start_end('add_clear_worker_volume_start', 'add_clear_worker_volume_end'):
             worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
         print("Sleeping 5 seconds to ensure everything is ready...")
@@ -111,7 +116,7 @@ def add_clear_worker(domain_name, node_ip, cluster_zone, root_progress, skip_cle
         with progress.set_start_end('assert_site_start', 'assert_site_end'):
             for try_num in range(3):
                 try:
-                    pprint(common.assert_site(domain_name, node_ip))
+                    pprint(common.assert_site(worker_id, hostname, node_ip))
                     ok = True
                     break
                 except Exception:
@@ -130,33 +135,34 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
         node_ip = node['ip']
         print('node_name={} node_ip={}'.format(node_name, node_ip))
         if not prepare_domain_names:
-            prepare_domain_names = set()
+            prepare_domain_names = {}
             eu_load_test_domain_nums = set()
             for server_num in servers.keys():
                 eu_load_test_domain_nums.add(server_num if server_num < 5 else 1)
             for eu_load_test_domain_num in eu_load_test_domain_nums:
-                domain_name = get_domain_name_from_num(eu_load_test_domain_num)
-                prepare_domain_names.add(domain_name)
-        delete_domain_names = set(prepare_domain_names)
+                hostname = get_domain_name_from_num(eu_load_test_domain_num)
+                worker_id = get_worker_id_from_num(eu_load_test_domain_num)
+                prepare_domain_names[worker_id] = hostname
+        delete_worker_ids = set(prepare_domain_names.keys())
         for i in range(1, 50):
-            delete_domain_names.add(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(i))
-        for domain_name in delete_domain_names:
-            with progress.set_start_end('worker_delete_start_{}'.format(domain_name), 'worker_delete_end_{}'.format(domain_name)):
-                worker.delete(domain_name)
-        for domain_name in prepare_domain_names:
-            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(domain_name), 'dummy_api_add_example_site_end_{}'.format(domain_name)):
-                dummy_api.add_example_site(domain_name, domain_name, cluster_zone)
-        for domain_name in prepare_domain_names:
-            volume_id = domain_name.replace('.', '--')
+            delete_worker_ids.add(get_worker_id_from_num(i))
+        for worker_id in delete_worker_ids:
+            with progress.set_start_end('worker_delete_start_{}'.format(worker_id), 'worker_delete_end_{}'.format(worker_id)):
+                worker.delete(worker_id)
+        for worker_id, hostname in prepare_domain_names.items():
+            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(worker_id), 'dummy_api_add_example_site_end_{}'.format(worker_id)):
+                dummy_api.add_example_site(worker_id, hostname, cluster_zone)
+        for worker_id, hostname in prepare_domain_names.items():
+            volume_id = worker_id.replace('.', '--')
             with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
                 worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
         if not skip_warm_site:
-            for domain_name in prepare_domain_names:
-                with progress.set_start_end('assert_site_start_{}'.format(domain_name), 'assert_site_end_{}'.format(domain_name)):
+            for worker_id, hostname in prepare_domain_names.items():
+                with progress.set_start_end('assert_site_start_{}'.format(worker_id), 'assert_site_end_{}'.format(worker_id)):
                     ok = False
                     for try_num in range(3):
                         try:
-                            pprint(common.assert_site(domain_name, node_ip))
+                            pprint(common.assert_site(worker_id, hostname, node_ip))
                             ok = True
                             break
                         except Exception:
@@ -168,7 +174,8 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
 
 def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator=False):
     with root_progress.start_sub(__spec__.name, 'prepare_custom_load_generator') as progress:
-        domain_name_servers = {}
+        worker_id_servers = {}
+        worker_id_hostnames = {}
         objects, duration_seconds, concurrency, obj_size_kb = None, None, None, None
         for server_num, server in servers.items():
             if not server['custom_load_options'].get('bucket_name'):
@@ -189,26 +196,28 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                 else:
                     assert int(server['obj_size_kb']) == obj_size_kb
                 if not prepare_domain_names:
-                    domain_name = get_domain_name_from_num(server_num if server_num < 5 else 1)
-                    domain_name_servers.setdefault(domain_name, []).append(server)
+                    hostname = get_domain_name_from_num(server_num if server_num < 5 else 1)
+                    worker_id = get_worker_id_from_num(server_num if server_num < 5 else 1)
+                    worker_id_servers.setdefault(worker_id, []).append(server)
+                    worker_id_hostnames[worker_id] = hostname
         if prepare_domain_names:
             assert use_default_bucket
             print("preparing custom load generator using the default bucket for all domain names / servers")
             if skip_prepare_load_generator:
                 print("Skipping actual prepare task because skip_prepare_load_generator=True")
-            for domain_name in prepare_domain_names:
-                print("domain_name={}".format(domain_name))
-                with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
+            for worker_id, hostname in prepare_domain_names.items():
+                print("worker_id={}".format(worker_id))
+                with progress.set_start_end('prepare_custom_bucket_start_{}'.format(worker_id), 'prepare_custom_bucket_end_{}'.format(worker_id)):
                     ok, i = False, 1
                     while not ok:
                         try:
                             if not skip_prepare_load_generator:
-                                prepare_default_bucket('https', domain_name, objects, obj_size_kb, with_delete=True)
+                                prepare_default_bucket('https', worker_id, hostname, objects, obj_size_kb, with_delete=True)
                             ok = True
                         except:
                             traceback.print_exc()
                             if i <= 5:
-                                print("Failed to prepare default bucket for domain {}, will retry ({}/5)".format(domain_name, i))
+                                print("Failed to prepare default bucket for worker {}, will retry ({}/5)".format(worker_id, i))
                                 i += 1
                                 time.sleep(5)
                             else:
@@ -218,12 +227,13 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                 server['custom_load_options']['skip_prepare_bucket'] = True
         else:
             assert not use_default_bucket
-            for domain_name in domain_name_servers.keys():
-                print("preparing custom load generator for domain_name {}".format(domain_name))
+            for worker_id in worker_id_servers.keys():
+                hostname = worker_id_hostnames[worker_id]
+                print("preparing custom load generator for worker {}".format(worker_id))
                 assert not skip_prepare_load_generator, "Cannot skip_prepare_load_generator when not using default bucket"
-                with progress.set_start_end('prepare_custom_bucket_start_{}'.format(domain_name), 'prepare_custom_bucket_end_{}'.format(domain_name)):
-                    bucket_name = prepare_custom_bucket('https', domain_name, objects, duration_seconds, concurrency, obj_size_kb)
-                for server in domain_name_servers[domain_name]:
+                with progress.set_start_end('prepare_custom_bucket_start_{}'.format(worker_id), 'prepare_custom_bucket_end_{}'.format(worker_id)):
+                    bucket_name = prepare_custom_bucket('https', worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb)
+                for server in worker_id_servers[worker_id]:
                     server['custom_load_options']['bucket_name'] = bucket_name
                     server['custom_load_options']['use_default_bucket'] = False
 

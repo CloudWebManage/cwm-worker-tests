@@ -2,7 +2,6 @@ import click
 
 from cwm_worker_cluster import config
 from cwm_worker_tests import common_cli
-import cwm_worker_tests.load_test
 from cwm_worker_tests import load_generator_custom
 
 
@@ -14,9 +13,10 @@ def custom():
 custom.add_command(common_cli.LoadGeneratorRunCommand('custom'))
 
 
-@custom.command(help="default METHOD: http\ndefault DOMAIN_NAME: {}".format(config.LOAD_TESTING_DOMAIN))
+@custom.command(help="default METHOD: http\ndefault WORKER_ID: {}\ndefault HOSTNAME: {}".format(config.LOAD_TESTING_WORKER_ID, config.LOAD_TESTING_DOMAIN))
 @click.argument('METHOD', default='http', required=False)
-@click.argument('DOMAIN_NAME', default=config.LOAD_TESTING_DOMAIN, required=False)
+@click.argument('WORKER_ID', default=config.LOAD_TESTING_WORKER_ID, required=False)
+@click.argument('HOSTNAME', default=config.LOAD_TESTING_DOMAIN, required=False)
 @click.option('--objects', type=int, default=10, show_default=True)
 @click.option('--duration_seconds', type=int, default=10, show_default=True)
 @click.option('--concurrency', type=int, default=6, show_default=True)

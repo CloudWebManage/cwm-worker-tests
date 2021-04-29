@@ -1,7 +1,6 @@
 import uuid
 import time
 import random
-import timeit
 import urllib3
 import datetime
 import contextlib
@@ -187,12 +186,12 @@ def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=
     )
 
 
-def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
+def prepare_custom_bucket(method='http', worker_id=config.LOAD_TESTING_WORKER_ID, hostname=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
                           obj_size_kb=1, bucket_name=None, skip_delete_worker=False, skip_add_clear_worker_volume=False, skip_dummy_api=False,
                           skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=True,
                           upload_concurrency=5, skip_create_bucket=False, only_upload_filenums=None, delete_keys=None):
     if not skip_all:
-        common.worker_volume_api_recreate(domain_name=domain_name, skip_delete_worker=skip_delete_worker,
+        common.worker_volume_api_recreate(worker_id=worker_id, hostname=hostname, skip_delete_worker=skip_delete_worker,
                                           skip_add_clear_worker_volume=skip_add_clear_worker_volume,
                                           skip_dummy_api=skip_dummy_api, skip_clear_cache=skip_clear_cache,
                                           skip_clear_volume=skip_clear_volume,
@@ -201,8 +200,8 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
         assert not dummy_api_limited_to_node_name, 'cannot limit dummy_api to node if skipping all recreation'
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
-    print("Creating bucket {} in domain_name {} method {}".format(bucket_name, domain_name, method))
-    s3 = get_s3_resource(method, domain_name, with_retries=True)
+    print("Creating bucket {} in domain_name {} method {}".format(bucket_name, hostname, method))
+    s3 = get_s3_resource(method, hostname, with_retries=True)
     if not skip_create_bucket:
         try:
             s3.create_bucket(Bucket=bucket_name)
@@ -218,7 +217,7 @@ def prepare_custom_bucket(method='http', domain_name=config.LOAD_TESTING_DOMAIN,
         print("Deleting {} files".format(len(delete_keys)))
 
     def put_or_del_object(op, key):
-        s3 = get_s3_resource(method, domain_name, with_retries=True)
+        s3 = get_s3_resource(method, hostname, with_retries=True)
         if op == 'put':
             bucket = s3.Bucket(bucket_name)
             i = int(key)
@@ -257,9 +256,9 @@ def get_default_bucket_name(obj_size_kb):
     return '{}-{}kb'.format(DEFAULT_BUCKET_NAME, obj_size_kb)
 
 
-def prepare_default_bucket(method, domain_name, objects, obj_size_kb, with_delete=False):
+def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False):
     bucket_name = get_default_bucket_name(obj_size_kb)
-    bucket = get_s3_resource(method, domain_name, with_retries=True).Bucket(bucket_name)
+    bucket = get_s3_resource(method, hostname, with_retries=True).Bucket(bucket_name)
     bucket.load()
     if not bucket.creation_date:
         bucket.create()
@@ -276,15 +275,15 @@ def prepare_default_bucket(method, domain_name, objects, obj_size_kb, with_delet
         elif object.key.startswith('Thread') and with_delete:
             delete_threadkeys.add(object.key)
     if len(missing_filenums) > 0 or len(delete_threadkeys) > 0:
-        prepare_custom_bucket(method, domain_name, obj_size_kb=obj_size_kb, bucket_name=bucket_name,
+        prepare_custom_bucket(method, worker_id, hostname, obj_size_kb=obj_size_kb, bucket_name=bucket_name,
                               skip_create_bucket=True, only_upload_filenums=missing_filenums, delete_keys=delete_threadkeys)
 
 
-def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb,
+def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb,
         benchdatafilename, custom_load_options=None, use_default_bucket=False):
     assert method in ['http', 'https'], "invalid method: {}".format(method)
     if not custom_load_options.get('random_domain_names'):
-        assert domain_name, "missing domain_name argument"
+        assert worker_id and hostname, "missing worker_id or hostname arguments"
     assert objects > 0
     assert duration_seconds > 0, "duration_seconds must be bigger than 0"
     assert obj_size_kb > 0, "obj_size argument should be empty for custom load generator"
@@ -301,17 +300,19 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
     else:
         assert not custom_load_options.get('random_domain_names'), 'bucket must be pre-prepared when using random domain names'
         assert not skip_prepare_bucket, 'cannot skip prepare bucket if no bucket_name'
-        bucket_name = prepare_custom_bucket(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb)
+        bucket_name = prepare_custom_bucket(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb)
     if custom_load_options.get('random_domain_names'):
         domain_name_buckets = {
-            domain_name: bucket_name
-            for domain_name in custom_load_options['random_domain_names']
+            hostname: bucket_name
+            for worker_id, hostname in custom_load_options['random_domain_names'].items()
         }
+        if use_default_bucket and not skip_prepare_bucket:
+            for worker_id, hostname in custom_load_options['random_domain_names'].items():
+                prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb)
     else:
-        domain_name_buckets = {domain_name: bucket_name}
-    if use_default_bucket and not skip_prepare_bucket:
-        for domain_name in domain_name_buckets.keys():
-            prepare_default_bucket(method, domain_name, objects, obj_size_kb)
+        domain_name_buckets = {hostname: bucket_name}
+        if use_default_bucket and not skip_prepare_bucket:
+            prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb)
     print("Starting {} threads of custom load ({})".format(concurrency, method))
     with open_benchdata_file(benchdatafilename, method) as benchdatafile:
         if benchdatafile:

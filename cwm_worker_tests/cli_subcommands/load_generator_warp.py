@@ -12,7 +12,8 @@ def warp():
 
 @warp.command()
 @click.option('--method', default='http', type=str)
-@click.option('--domain-name', default=config.LOAD_TESTING_DOMAIN, type=str)
+@click.option('--worker-id', default=config.LOAD_TESTING_WORKER_ID, type=str)
+@click.option('--hostname', default=config.LOAD_TESTING_DOMAIN, type=str)
 @click.option('--objects', default=10, type=int)
 @click.option('--duration-seconds', default=10, type=int)
 @click.option('--concurrency', default=6, type=int)

@@ -38,7 +38,6 @@ if __name__ == '__main__':
             "base_servers_all_eu": True,
             "only_test_method": None,
             "load_generator": "custom",
-
         },
         {
             "concurrency": [1, 5],

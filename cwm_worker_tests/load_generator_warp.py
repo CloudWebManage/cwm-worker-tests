@@ -56,7 +56,7 @@ def get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, 
     return cmd, bucket_name
 
 
-def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb,
+def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb,
         benchdatafilename, custom_load_options=None, use_default_bucket=False):
     assert not use_default_bucket, 'use_default_bucket is not supported for warp load generator'
     duration = '{}s'.format(duration_seconds)
@@ -64,7 +64,7 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
     start_time = datetime.datetime.now()
     max_prepare_server_seconds = int(duration_seconds / 5)
     assert_warp_version()
-    cmd, bucket_name = get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, benchdatafilename)
+    cmd, bucket_name = get_warp_cmd(method, hostname, objects, duration, concurrency, obj_size, benchdatafilename)
     ret, out = subprocess.getstatusoutput(cmd)
     while ret != 0 and is_warp_preparing_server_error(out):
         elapsed_seconds = (datetime.datetime.now() - start_time).total_seconds()
@@ -72,7 +72,7 @@ def run(method, domain_name, objects, duration_seconds, concurrency, obj_size_kb
         print(out)
         print("Failed to prepare server, waiting 5 seconds and retrying ({}s)".format(elapsed_seconds))
         time.sleep(5)
-        cmd, bucket_name = get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, benchdatafilename)
+        cmd, bucket_name = get_warp_cmd(method, hostname, objects, duration, concurrency, obj_size, benchdatafilename)
         ret, out = subprocess.getstatusoutput(cmd)
     elapsed_seconds = (datetime.datetime.now() - start_time).total_seconds()
     print("warp completed ({}s)".format(elapsed_seconds))
