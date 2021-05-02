@@ -143,15 +143,15 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
                 hostname = get_domain_name_from_num(eu_load_test_domain_num)
                 worker_id = get_worker_id_from_num(eu_load_test_domain_num)
                 prepare_domain_names[worker_id] = hostname
+        for worker_id, hostname in prepare_domain_names.items():
+            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(worker_id), 'dummy_api_add_example_site_end_{}'.format(worker_id)):
+                dummy_api.add_example_site(worker_id, hostname, cluster_zone)
         delete_worker_ids = set(prepare_domain_names.keys())
         for i in range(1, 50):
             delete_worker_ids.add(get_worker_id_from_num(i))
         for worker_id in delete_worker_ids:
             with progress.set_start_end('worker_delete_start_{}'.format(worker_id), 'worker_delete_end_{}'.format(worker_id)):
                 worker.delete(worker_id)
-        for worker_id, hostname in prepare_domain_names.items():
-            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(worker_id), 'dummy_api_add_example_site_end_{}'.format(worker_id)):
-                dummy_api.add_example_site(worker_id, hostname, cluster_zone)
         for worker_id, hostname in prepare_domain_names.items():
             volume_id = common.get_namespace_name_from_worker_id(worker_id)
             with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
