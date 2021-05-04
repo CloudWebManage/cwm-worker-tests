@@ -49,7 +49,7 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
     print("Running {} load tests from server {} load_test_domain_num={} load_generator={}".format(protocol, server_name, load_test_domain_num, load_generator))
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
-    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} --worker-id {worker_id} --hostname \\"{hostname}\\" ' \
+    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} --worker-id \\"{worker_id}\\" --hostname \\"{hostname}\\" ' \
                      '--skip-delete-worker --skip-clear-volume --concurrency {concurrency} --obj-size-kb {obj_size_kb} ' \
                      '--benchdatafilename /output/warp-bench-data --skip_add_worker --protocol {protocol} ' \
                      '--load_generator {load_generator} --custom-load-options {custom_load_options}'.format(
@@ -63,6 +63,7 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
         load_generator=load_generator,
         custom_load_options='b64:' + base64.b64encode(json.dumps(custom_load_options).encode()).decode()
     )
+    print("test_load_args: {}".format(test_load_args))
     ret, out = subprocess.getstatusoutput('''
         {ssh} "docker run --name load_test_{protocol} -d --entrypoint bash -e KUBECONFIG=/kube/.config -v /root/cwm-worker-cluster/.kubeconfig:/kube/.config -v /root/cwm-worker-cluster/.output:/output tests -c \'cwm-worker-tests load-test {test_load_args} 2>&1\'"
     '''.format(scp=scp, ssh=ssh, test_load_args=test_load_args, ip=server_ip, num=load_test_domain_num, protocol=protocol))
