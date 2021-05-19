@@ -28,8 +28,8 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         assert load_generator in ['warp', 'custom']
         if load_generator == 'custom' and 'random_domain_names' not in custom_load_options:
             custom_load_options['random_domain_names'] = {
-                config.LOAD_TESTING_DOMAIN_NUM_WORKER_ID_TEMPLATE.format(i+1): config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(i+1)
-                for i in range(int(custom_load_options.get('number_of_random_domain_names', 10)))
+                config.get_load_testing_domain_num_worker_id(i+1): config.get_load_testing_domain_num_hostname(i+1)
+                for i in range(int(custom_load_options.get('number_of_random_domain_names', 7)))
             }
         if custom_load_options.get('random_domain_names'):
             assert load_generator == 'custom', 'random domain names is only supported for custom load generator'

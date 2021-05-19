@@ -5,7 +5,6 @@ from pprint import pprint
 from cwm_worker_cluster import config
 from cwm_worker_cluster import common
 from cwm_worker_cluster import worker
-from cwm_worker_cluster import dummy_api
 
 
 def get_now_string():
@@ -56,24 +55,18 @@ def main(objects:int, duration_seconds:int, worker_id:str, hostname:str, skip_de
         print('node_name={} node_ip={}'.format(node_name, node_ip))
     if not hostname and not worker_id and not custom_load_options.get('random_domain_names'):
         if cwmc_name == config.LOAD_TESTING_CWMC_NAME:
-            if eu_load_test_domain_num and int(eu_load_test_domain_num) > 1:
-                hostname = config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(eu_load_test_domain_num)
-                worker_id = config.LOAD_TESTING_DOMAIN_NUM_WORKER_ID_TEMPLATE.format(eu_load_test_domain_num)
-            else:
-                hostname = config.LOAD_TESTING_DOMAIN
-                worker_id = config.LOAD_TESTING_WORKER_ID
+            hostname = config.get_load_testing_domain_num_hostname(eu_load_test_domain_num)
+            worker_id = config.get_load_testing_domain_num_worker_id(eu_load_test_domain_num)
         else:
             assert node_ip, 'missing node_ip'
             hostname = node_ip.replace('.', '-') + config.AUTO_DOMAIN_IP_SUFFIX
             worker_id = 'cwtltautoi'
-    cluster_zone = common.get_cluster_zone()
-    if not skip_add_worker:
-        dummy_api.add_example_site(worker_id, hostname, cluster_zone)
     if not skip_delete_worker:
         worker.delete(worker_id)
     if not skip_add_worker:
         volume_id = common.get_namespace_name_from_worker_id(worker_id)
-        worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
+        if not skip_clear_volume:
+            worker.clear_volume(volume_id)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")

@@ -1,5 +1,4 @@
 import os
-import uuid
 import json
 import time
 import base64
@@ -14,7 +13,6 @@ import zstandard as zstd
 
 from cwm_worker_cluster import common
 from cwm_worker_cluster import config
-from cwm_worker_cluster import dummy_api
 from cwm_worker_cluster import worker
 from cwm_worker_tests.load_generator_custom import prepare_default_bucket, prepare_custom_bucket
 from cwm_worker_tests.distributed_tests import create_servers
@@ -26,11 +24,11 @@ BUCKET_INF = 'inf'
 
 
 def get_domain_name_from_num(domain_num):
-    return config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(domain_num if domain_num < 5 else 1)
+    return config.get_load_testing_domain_num_hostname(domain_num if domain_num < 5 else 1)
 
 
 def get_worker_id_from_num(domain_num):
-    return config.LOAD_TESTING_DOMAIN_NUM_WORKER_ID_TEMPLATE.format(domain_num if domain_num < 5 else 1)
+    return config.get_load_testing_domain_num_worker_id(domain_num if domain_num < 5 else 1)
 
 
 def prepare_server_for_load_test(tempdir, server_ip):
@@ -101,15 +99,12 @@ def add_clear_worker(worker_id, hostname, node_ip, cluster_zone, root_progress, 
         if not node_ip:
             node = common.get_cluster_nodes('worker')[0]
             node_ip = node['ip']
-        if not cluster_zone:
-            cluster_zone = common.get_cluster_zone()
-        with progress.set_start_end('dummy_api_add_example_site_start', 'dummy_api_add_example_site_end'):
-            dummy_api.add_example_site(worker_id, hostname, cluster_zone)
         volume_id = common.get_namespace_name_from_worker_id(worker_id)
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
             worker.delete(worker_id)
-        with progress.set_start_end('add_clear_worker_volume_start', 'add_clear_worker_volume_end'):
-            worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
+        if not skip_clear_volume:
+            with progress.set_start_end('clear_worker_volume_start', 'clear_worker_volume_end'):
+                worker.clear_volume(volume_id)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")
@@ -144,19 +139,17 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
                 hostname = get_domain_name_from_num(eu_load_test_domain_num)
                 worker_id = get_worker_id_from_num(eu_load_test_domain_num)
                 prepare_domain_names[worker_id] = hostname
-        for worker_id, hostname in prepare_domain_names.items():
-            with progress.set_start_end('dummy_api_add_example_site_start_{}'.format(worker_id), 'dummy_api_add_example_site_end_{}'.format(worker_id)):
-                dummy_api.add_example_site(worker_id, hostname, cluster_zone)
         delete_worker_ids = set(prepare_domain_names.keys())
         for i in range(1, 50):
             delete_worker_ids.add(get_worker_id_from_num(i))
         for worker_id in delete_worker_ids:
             with progress.set_start_end('worker_delete_start_{}'.format(worker_id), 'worker_delete_end_{}'.format(worker_id)):
                 worker.delete(worker_id)
-        for worker_id, hostname in prepare_domain_names.items():
-            volume_id = common.get_namespace_name_from_worker_id(worker_id)
-            with progress.set_start_end('add_clear_worker_volume_start_{}'.format(volume_id), 'add_clear_worker_volume_end_{}'.format(volume_id)):
-                worker.add_clear_volume(volume_id, skip_clear_volume=skip_clear_volume)
+        if not skip_clear_volume:
+            for worker_id, hostname in prepare_domain_names.items():
+                volume_id = common.get_namespace_name_from_worker_id(worker_id)
+                with progress.set_start_end('clear_worker_volume_start_{}'.format(volume_id), 'clear_worker_volume_end_{}'.format(volume_id)):
+                    worker.clear_volume(volume_id)
         if not skip_warm_site:
             for worker_id, hostname in prepare_domain_names.items():
                 with progress.set_start_end('assert_site_start_{}'.format(worker_id), 'assert_site_end_{}'.format(worker_id)):
@@ -565,14 +558,14 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
             output_row = {
                 'endpoint': endpoint,
                 'datacenter': {
-                    'http://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(1)): 'EU',
-                    'https://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(1)): 'EU',
-                    'http://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(2)): 'IL',
-                    'https://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(2)): 'IL',
-                    'http://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(3)): 'CA-TR',
-                    'https://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(3)): 'CA-TR',
-                    'http://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(4)): 'EU-LO',
-                    'https://{}'.format(config.LOAD_TESTING_DOMAIN_NUM_TEMPLATE.format(4)): 'EU-LO',
+                    'http://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
+                    'https://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
+                    'http://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
+                    'https://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
+                    'http://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
+                    'https://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
+                    'http://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
+                    'https://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
                 }[endpoint] if not base_servers_all_eu else 'EU',
                 'total-percent-errors': (all_ops_total_errors / all_ops_total_requests * 100) if all_ops_total_requests > 0 else 0,
                 'total-requests-per-second': all_ops_total_requests / total_duration_seconds,

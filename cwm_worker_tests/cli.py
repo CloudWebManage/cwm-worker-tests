@@ -111,13 +111,13 @@ def distributed_load_test_multi(tests_config):
             "load_generator": "custom",
             "concurrency": 1,
             "num_extra_eu_servers": 4,
-            "number_of_random_domain_names": 10,
+            "number_of_random_domain_names": 7,
             "make_put_or_del_every_iterations": 1000
         },
         "multi_values": {
             "concurrency": [1,5],
             "num_extra_eu_servers": [1,4],
-            "number_of_random_domain_names": [10, 25, 50]
+            "number_of_random_domain_names": [3, 5, 7]
         },
         "tests": [
             {"obj_size_kb": 100, "make_put_or_del_every_iterations": 1000},
