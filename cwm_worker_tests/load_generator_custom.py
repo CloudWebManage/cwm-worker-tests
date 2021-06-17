@@ -187,17 +187,11 @@ def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=
 
 
 def prepare_custom_bucket(method='http', worker_id=config.LOAD_TESTING_WORKER_ID, hostname=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
-                          obj_size_kb=1, bucket_name=None, skip_delete_worker=False, skip_add_clear_worker_volume=False, skip_dummy_api=False,
-                          skip_clear_cache=False, skip_clear_volume=False, dummy_api_limited_to_node_name=None, skip_all=True,
+                          obj_size_kb=1, bucket_name=None, skip_delete_worker=False,
+                          skip_clear_cache=False, skip_clear_volume=False, skip_all=True,
                           upload_concurrency=5, skip_create_bucket=False, only_upload_filenums=None, delete_keys=None):
     if not skip_all:
-        common.worker_volume_api_recreate(worker_id=worker_id, hostname=hostname, skip_delete_worker=skip_delete_worker,
-                                          skip_add_clear_worker_volume=skip_add_clear_worker_volume,
-                                          skip_dummy_api=skip_dummy_api, skip_clear_cache=skip_clear_cache,
-                                          skip_clear_volume=skip_clear_volume,
-                                          dummy_api_limited_to_node_name=dummy_api_limited_to_node_name)
-    else:
-        assert not dummy_api_limited_to_node_name, 'cannot limit dummy_api to node if skipping all recreation'
+        common.worker_volume_api_recreate(worker_id=worker_id, skip_delete_worker=skip_delete_worker, skip_clear_cache=skip_clear_cache, skip_clear_volume=skip_clear_volume)
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
     print("Creating bucket {} in domain_name {} method {}".format(bucket_name, hostname, method))
