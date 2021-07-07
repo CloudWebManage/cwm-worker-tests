@@ -212,8 +212,23 @@ def create_servers(servers, post_delete_cleanup, create_servers_stats, root_prog
                             'servers': tmp_keep_servers
                         }, f)
                 else:
-                    print("Deleting servers")
-                    for server in servers.values():
-                        if server.get('name'):
-                            delete_server(tempdir, server['name'])
+                    _delete_servers(servers, tempdir)
                 post_delete_cleanup(servers, create_servers_stats)
+
+
+def _delete_servers(servers, tempdir):
+    print("Deleting servers")
+    for server in servers.values():
+        if server.get('name'):
+            delete_server(tempdir, server['name'])
+
+
+def delete_kept_servers():
+    KEEP_SERVERS_JSON_PATH = os.environ['KEEP_SERVERS_JSON_PATH']
+    with tempfile.TemporaryDirectory() as tempdir:
+        # tempdir = '.temp'
+        print('tempdir={}'.format(tempdir))
+        config.get_cloudcli_yaml(tempdir)
+        with open(KEEP_SERVERS_JSON_PATH) as f:
+            servers = json.load(f)['servers']
+        _delete_servers(servers, tempdir)

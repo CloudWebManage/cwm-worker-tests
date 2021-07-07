@@ -10,6 +10,7 @@ import cwm_worker_tests.cli_subcommands.load_generator_warp
 from cwm_worker_tests import common_cli
 import cwm_worker_tests.distributed_tests.distributed_load_tests
 import cwm_worker_tests.dns
+import cwm_worker_tests.distributed_tests.create_servers
 
 
 @click.group(context_settings={'max_content_width': 200})
@@ -146,3 +147,8 @@ def check_domain_dns():
     else:
         print('OK', file=sys.stderr)
         exit(0)
+
+
+@main.command()
+def distributed_load_test_delete_kept_servers():
+    cwm_worker_tests.distributed_tests.create_servers.delete_kept_servers()
