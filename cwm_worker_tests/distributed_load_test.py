@@ -29,9 +29,15 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         if load_generator == 'custom' and 'random_domain_names' not in custom_load_options:
             if custom_load_options.get('test_all_external_gateways'):
                 assert not custom_load_options.get('number_of_random_domain_names'), 'cannot specify number_of_random_domain_names with test_all_external_gateways'
+                assert not custom_load_options.get('test_all_cluster_zone'), 'cannot specify test_all_cluster_zone and test_all_external_gateways'
                 custom_load_options['random_domain_names'] = {
                     dnc['worker_id']: dnc['hostname']
                     for dnc in config.LOAD_TESTING_GATEWAYS.values() if dnc['type'] not in ['mock_geo', 'cwm']
+                }
+            elif custom_load_options.get('test_all_cluster_zone'):
+                custom_load_options['random_domain_names'] = {
+                    dnc['worker_id']: dnc['hostname']
+                    for dnc in config.LOAD_TESTING_CLUSTERS[custom_load_options['test_all_cluster_zone']]
                 }
             else:
                 custom_load_options['random_domain_names'] = {
