@@ -400,7 +400,7 @@ def csv_decompress(csv_compression_method, csv_compressed_filename, csv_filename
         csv_decompress_gz(csv_compressed_filename, csv_filename)
 
 
-def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu, only_test_method, load_generator):
+def aggregate_test_results(servers, total_duration_seconds, base_servers_all_zone, only_test_method, load_generator):
     overview_report = {}
     load_steps = []
     for num, _ in servers.items():
@@ -566,7 +566,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_eu,
                     'https://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
                     'http://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
                     'https://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
-                }.get(endpoint, '??') if not base_servers_all_eu else 'EU',
+                }.get(endpoint, '??') if not base_servers_all_zone else base_servers_all_zone,
                 'total-percent-errors': (all_ops_total_errors / all_ops_total_requests * 100) if all_ops_total_requests > 0 else 0,
                 'total-requests-per-second': all_ops_total_requests / total_duration_seconds,
                 'total-successful-requests-per-second': all_ops_total_successful_requests / total_duration_seconds,

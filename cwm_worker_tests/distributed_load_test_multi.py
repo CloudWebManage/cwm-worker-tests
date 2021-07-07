@@ -21,7 +21,7 @@ def run_test(testnum, test, dry_run, skip_add_clear_workers=False, skip_prepare_
         concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
         num_extra_eu_servers=test.get('num_extra_eu_servers', 0),
         num_base_servers=test.get('num_base_servers', 4),
-        base_servers_all_eu=test.get('base_servers_all_eu', True),
+        base_servers_all_zone=test.get('base_servers_all_zone', 'EU'),
         only_test_method=test.get('only_test_method'),
         load_generator=test.get('load_generator', 'warp'),
         custom_load_options={

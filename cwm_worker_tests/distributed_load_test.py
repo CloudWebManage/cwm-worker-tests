@@ -12,7 +12,7 @@ from cwm_worker_tests.distributed_tests.progress import RootProgress
 
 
 def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, num_extra_eu_servers:int,
-         num_base_servers:int, base_servers_all_eu:bool, only_test_method:str, load_generator:str,
+         num_base_servers:int, base_servers_all_zone:str, only_test_method:str, load_generator:str,
          custom_load_options:dict, with_deploy:bool):
     ret, out = subprocess.getstatusoutput("rm -rf {distdir}; mkdir {distdir}".format(distdir=distributed_load_tests.DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR))
     assert ret == 0, out
@@ -67,14 +67,14 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
             **load_test_kwargs,
             "num_extra_eu_servers": num_extra_eu_servers,
             "num_base_servers": num_base_servers,
-            "base_servers_all_eu": base_servers_all_eu,
+            "base_servers_all_zone": base_servers_all_zone,
             "load_generator": load_generator
         }))
         servers = {}
         for i in range(num_base_servers):
             server_num = i+1
-            if base_servers_all_eu:
-                datacenter = 'EU'
+            if base_servers_all_zone:
+                datacenter = base_servers_all_zone.upper()
             else:
                 datacenter = {1: 'EU', 2: 'IL', 3: 'CA-TR', 4: 'EU-LO'}[server_num]
             servers[server_num] = {'datacenter': datacenter, **deepcopy(load_test_kwargs)}
@@ -85,14 +85,14 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         pprint({"run_failed": progress.set('run_failed_after_run_distributed_load_tests', run_failed)})
         end_time = datetime.datetime.now()
         print('{} end load test'.format(end_time))
-        if not distributed_load_tests.aggregate_test_results(servers, duration_seconds, base_servers_all_eu, only_test_method, load_generator):
+        if not distributed_load_tests.aggregate_test_results(servers, duration_seconds, base_servers_all_zone, only_test_method, load_generator):
             run_failed = True
         pprint({"run_failed": progress.set('run_failed_after_aggregate_test_results', run_failed)})
         pprint({
             **load_test_kwargs,
             "num_extra_eu_servers": num_extra_eu_servers,
             "num_base_servers": num_base_servers,
-            "base_servers_all_eu": base_servers_all_eu,
+            "base_servers_all_zone": base_servers_all_zone,
             'start_time': str(start_time.astimezone(pytz.timezone('Israel'))),
             'end_time': str(end_time.astimezone(pytz.timezone('Israel'))),
             "load_generator": load_generator

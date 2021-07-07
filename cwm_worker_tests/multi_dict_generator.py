@@ -35,7 +35,7 @@ if __name__ == '__main__':
             "duration_seconds": 600,
             "obj_size_kb": 100,
             "num_base_servers": 4,
-            "base_servers_all_eu": True,
+            "base_servers_all_zone": "EU",
             "only_test_method": None,
             "load_generator": "custom",
         },

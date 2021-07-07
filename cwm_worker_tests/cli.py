@@ -54,7 +54,7 @@ def load_test(**kwargs):
 @click.option('--obj-size-kb', default=10, type=int)
 @click.option('--num-extra-eu-servers', default=0, type=int)
 @click.option('--num-base-servers', default=4, type=int)
-@click.option('--base-servers-all-eu', is_flag=True)
+@click.option('--base-servers-all-zone', type=str)
 @click.option('--only-test-method', type=str)
 @click.option('--load_generator', default='warp', type=str)
 @click.option('--custom-load-options', type=str, help="json string or base64 encoded json string prefixed with 'b64:'")
@@ -73,7 +73,7 @@ def distributed_load_test(**kwargs):
 @main.command()
 @click.option('--num-servers', required=True, type=int)
 @click.option('--total-duration-seconds', default=10, type=int)
-@click.option('--base-servers-all-eu', is_flag=True)
+@click.option('--base-servers-all-zone', type=str)
 @click.option('--only-test-method', type=str)
 @click.option('--load-generator', default='warp', type=str)
 def distributed_load_test_aggregate_test_results(**kwargs):
@@ -106,7 +106,7 @@ def distributed_load_test_multi(tests_config):
             "duration_seconds": 600,
             "obj_size_kb": 100,
             "num_base_servers": 4,
-            "base_servers_all_eu": true,
+            "base_servers_all_zone": "EU",
             "only_test_method": null,
             "load_generator": "custom",
             "concurrency": 1,
@@ -124,7 +124,10 @@ def distributed_load_test_multi(tests_config):
             {"obj_size_kb": 1000, "make_put_or_del_every_iterations": 5000},
             {"obj_size_kb": 10000, "make_put_or_del_every_iterations": 20000}
         ],
-        "custom_load_options": {},
+        "custom_load_options": {
+            "test_all_external_gateways": false,
+            "test_all_cluster_zone": null
+        },
         "dry_run": true,
         "stop_on_error": true
     }
