@@ -79,7 +79,7 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
                 datacenter = {1: 'EU', 2: 'IL', 3: 'CA-TR', 4: 'EU-LO'}[server_num]
             servers[server_num] = {'datacenter': datacenter, **deepcopy(load_test_kwargs)}
         for i in range(5, 5+num_extra_eu_servers):
-            servers[i] = {'datacenter': 'EU', **deepcopy(load_test_kwargs)}
+            servers[i] = {'datacenter': base_servers_all_zone.upper() if base_servers_all_zone else 'EU', **deepcopy(load_test_kwargs)}
         # run_failed = True
         run_failed = not distributed_load_tests.run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options)
         pprint({"run_failed": progress.set('run_failed_after_run_distributed_load_tests', run_failed)})

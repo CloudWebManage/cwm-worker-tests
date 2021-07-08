@@ -6,7 +6,7 @@ import datetime
 import contextlib
 import subprocess
 import concurrent.futures
-from threading import Thread
+from threading import Thread, Lock
 from collections import defaultdict
 
 import boto3
@@ -38,7 +38,7 @@ def get_start_end_duration_ns():
 
 class RunCustomThread(Thread):
 
-    def __init__(self, thread_num, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, domain_name_buckets):
+    def __init__(self, thread_num, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, benchdatafilelock, domain_name_buckets):
         super().__init__()
         self.method = method
         self.duration_seconds = duration_seconds
@@ -50,6 +50,7 @@ class RunCustomThread(Thread):
         self.last_put_object_domain_name = None
         self.custom_load_options = custom_load_options
         self.benchdatafile = benchdatafile
+        self.benchdatafilelock = benchdatafilelock
         self.domain_name_buckets = domain_name_buckets
         self.domain_name_buckets_cache = {}
 
@@ -80,7 +81,9 @@ class RunCustomThread(Thread):
         end = start_end_duration['end_time'].strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
         writearg = ",".join(map(str, [op, bytes if bytes else 0, endpoint, file, error if error else '', start, first_byte, end, duration_ns])) + "\n"
         if self.benchdatafile:
-            self.benchdatafile.write(writearg)
+            with self.benchdatafilelock:
+                self.benchdatafile.write(writearg)
+                self.benchdatafile.flush()
 
     def make_head_request(self, object, domain_name):
         self.stats['num_head_requests'] += 1
@@ -311,9 +314,12 @@ def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj
     with open_benchdata_file(benchdatafilename, method) as benchdatafile:
         if benchdatafile:
             benchdatafile.write("op,bytes,endpoint,file,error,start,first_byte,end,duration_ns\n")
+            benchdatafilelock = Lock()
+        else:
+            benchdatafilelock = None
         threads = {}
         for i in range(concurrency):
-            thread = RunCustomThread(i+1, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, domain_name_buckets)
+            thread = RunCustomThread(i+1, method, objects, duration_seconds, obj_size_kb, custom_load_options, benchdatafile, benchdatafilelock, domain_name_buckets)
             threads[i] = thread
             thread.start()
         start_time = datetime.datetime.now()
