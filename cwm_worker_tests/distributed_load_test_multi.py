@@ -136,7 +136,7 @@ def get_from_path_parts(*pathparts, parse_json=False):
         return None
 
 
-def aggregate_multi_test_stats():
+def aggregate_multi_test_stats(cluster_zone=None):
     tests = {}
     error_percent_buckets = [1, 5, 50, 100]
     for testpath in glob(".distributed-load-test-multi/*"):
@@ -212,7 +212,7 @@ def aggregate_multi_test_stats():
         totals_row['end'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('finalize_load_tests_end')
         start_ts = str(int(pytz.timezone('Israel').localize(datetime.datetime.strptime(totals_row['start'], '%Y-%m-%dT%H:%M:%S')).timestamp() * 1000)) if totals_row['start'] else ''
         end_ts = str(int(pytz.timezone('Israel').localize(datetime.datetime.strptime(totals_row['end'], '%Y-%m-%dT%H:%M:%S')).timestamp() * 1000)) if totals_row['end'] else ''
-        totals_row['grafana'] = config.LOAD_TESTING_GRAFANA_DASHBOARD_URL_TEMPLATE.format(start_ts=start_ts, end_ts=end_ts)
+        totals_row['grafana'] = config.get_load_testing_grafana_dashboard_url(start_ts=start_ts, end_ts=end_ts, cluster_zone=cluster_zone)
 
     def totals_rows():
         for testnum in list(sorted([k for k, v in tests.items() if not v.get('__has_error__')])) + list(sorted([k for k, v in tests.items() if v.get('__has_error__')])):
@@ -291,5 +291,5 @@ def main(tests_config):
         if not ok and stop_on_error:
             break
     pprint(results)
-    aggregate_multi_test_stats()
+    aggregate_multi_test_stats(cluster_zone=custom_load_options.get('test_all_cluster_zone'))
     exit(0 if all([r['ok'] for r in results.values()]) else 1)
