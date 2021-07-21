@@ -14,6 +14,7 @@ import zstandard as zstd
 from cwm_worker_cluster import common
 from cwm_worker_cluster import config
 from cwm_worker_cluster import worker
+from cwm_worker_cluster import cluster
 from cwm_worker_tests.load_generator_custom import prepare_default_bucket, prepare_custom_bucket
 from cwm_worker_tests.distributed_tests import create_servers
 
@@ -122,7 +123,8 @@ def add_clear_worker(worker_id, hostname, node_ip, cluster_zone, root_progress, 
             assert ok, "Failed to assert_site 3 times, giving up"
 
 
-def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_volume=False, skip_warm_site=False):
+def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_volume=False,
+                      skip_warm_site=False, skip_wait_inactive_namespaces=False):
     with root_progress.start_sub(__spec__.name, 'add_clear_workers') as progress:
         print("Adding and clearing workers")
         cluster_zone = common.get_cluster_zone()
@@ -150,6 +152,18 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
                 volume_id = common.get_namespace_name_from_worker_id(worker_id)
                 with progress.set_start_end('clear_worker_volume_start_{}'.format(volume_id), 'clear_worker_volume_end_{}'.format(volume_id)):
                     worker.clear_volume(volume_id)
+        if not skip_wait_inactive_namespaces:
+            print("Waiting for inactive namespaces...")
+            while True:
+                num_inactive_namespaces = 0
+                for namespace in cluster.iterate_inactive_namespaces():
+                    num_inactive_namespaces += 1
+                    print(namespace)
+                if num_inactive_namespaces > 0:
+                    print("Sleeping 5 seconds to wait for inactive namespaces...")
+                    time.sleep(5)
+                else:
+                    break
         if not skip_warm_site:
             for worker_id, hostname in prepare_domain_names.items():
                 with progress.set_start_end('assert_site_start_{}'.format(worker_id), 'assert_site_end_{}'.format(worker_id)):
