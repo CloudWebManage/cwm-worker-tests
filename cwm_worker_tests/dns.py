@@ -1,11 +1,12 @@
 import socket
 
-from cwm_worker_cluster import config
 from cwm_worker_cluster import common
+from cwm_worker_cluster.test_instance import api as test_instance_api
 
 
 def check_domain():
-    _, _, ipaddrlist = socket.gethostbyname_ex(config.LOAD_TESTING_DOMAIN)
+    test_instance = test_instance_api.get_one(common.get_cluster_zone(), test_instance_api.ROLE_DEFAULT)
+    _, _, ipaddrlist = socket.gethostbyname_ex(test_instance['hostname'])
     nodes = {node['ip']: node['name'] for node in common.get_cluster_nodes(role='worker')}
     dns_ips_missing_in_nodes = []
     for ip in ipaddrlist:

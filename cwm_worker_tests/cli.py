@@ -141,12 +141,6 @@ def distributed_load_test_multi(tests_config):
 def check_domain_dns():
     res = cwm_worker_tests.dns.check_domain()
     yaml.safe_dump(res, sys.stdout)
-    if len(res['dns_ips_missing_in_nodes']) > 0 or len(res['nodes_missing_in_dns_ips']) > 0:
-        print('ERROR! dns mismatch', file=sys.stderr)
-        exit(1)
-    else:
-        print('OK', file=sys.stderr)
-        exit(0)
 
 
 @main.command()

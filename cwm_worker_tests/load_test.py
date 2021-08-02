@@ -2,9 +2,9 @@ import time
 import datetime
 from pprint import pprint
 
-from cwm_worker_cluster import config
 from cwm_worker_cluster import common
-from cwm_worker_cluster import worker
+from cwm_worker_cluster.worker import api as worker_api
+from cwm_worker_cluster.test_instance import api as test_instance_api
 
 
 def get_now_string():
@@ -54,19 +54,15 @@ def main(objects:int, duration_seconds:int, worker_id:str, hostname:str, skip_de
         node_ip = node['ip']
         print('node_name={} node_ip={}'.format(node_name, node_ip))
     if not hostname and not worker_id and not custom_load_options.get('random_domain_names'):
-        if cwmc_name == config.LOAD_TESTING_CWMC_NAME:
-            hostname = config.get_load_testing_domain_num_hostname(eu_load_test_domain_num)
-            worker_id = config.get_load_testing_domain_num_worker_id(eu_load_test_domain_num)
-        else:
-            assert node_ip, 'missing node_ip'
-            hostname = node_ip.replace('.', '-') + config.AUTO_DOMAIN_IP_SUFFIX
-            worker_id = 'cwtltautoi'
+        test_instance = test_instance_api.get_one(common.get_cluster_zone(), test_instance_api.ROLE_LOAD_TEST)
+        hostname = test_instance['hostname']
+        worker_id = test_instance['worker_id']
     if not skip_delete_worker:
-        worker.delete(worker_id)
+        worker_api.delete(worker_id)
     if not skip_add_worker:
         volume_id = common.get_namespace_name_from_worker_id(worker_id)
         if not skip_clear_volume:
-            worker.clear_volume(volume_id)
+            worker_api.clear_volume(volume_id)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")

@@ -13,8 +13,8 @@ import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
-from cwm_worker_cluster import config
-from cwm_worker_cluster import common
+from cwm_worker_cluster.worker import api as worker_api
+from cwm_worker_cluster.test_instance import api as test_instance_api
 
 
 urllib3.disable_warnings()
@@ -180,7 +180,7 @@ def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=
     else:
         assert with_retries, 'must set with_retries=True if you set retry_max_attempts'
     return boto3.resource(
-        's3', **config.get_deployment_s3_resource_kwargs(method, domain_name),
+        's3', **test_instance_api.get_deployment_s3_resource_kwargs_by_hostname(method, domain_name),
         config=Config(
             signature_version='s3v4',
             retries={'max_attempts': retry_max_attempts, 'mode': 'standard'},
@@ -189,12 +189,12 @@ def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=
     )
 
 
-def prepare_custom_bucket(method='http', worker_id=config.LOAD_TESTING_WORKER_ID, hostname=config.LOAD_TESTING_DOMAIN, objects=10, duration_seconds=10, concurrency=6,
+def prepare_custom_bucket(method, worker_id, hostname, objects=10, duration_seconds=10, concurrency=6,
                           obj_size_kb=1, bucket_name=None, skip_delete_worker=False,
                           skip_clear_cache=False, skip_clear_volume=False, skip_all=True,
                           upload_concurrency=5, skip_create_bucket=False, only_upload_filenums=None, delete_keys=None):
     if not skip_all:
-        common.worker_volume_api_recreate(worker_id=worker_id, skip_delete_worker=skip_delete_worker, skip_clear_cache=skip_clear_cache, skip_clear_volume=skip_clear_volume)
+        worker_api.volume_api_recreate(worker_id=worker_id, skip_delete_worker=skip_delete_worker, skip_clear_cache=skip_clear_cache, skip_clear_volume=skip_clear_volume)
     if not bucket_name:
         bucket_name = str(uuid.uuid4())
     print("Creating bucket {} in domain_name {} method {}".format(bucket_name, hostname, method))
