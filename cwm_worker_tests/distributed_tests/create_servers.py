@@ -81,10 +81,13 @@ def build_test_docker_image(tempdir, name, ip):
     ret, out = subprocess.getstatusoutput('''
                             {ssh} "rm -rf /root/cwm-worker-cluster" &&\
                             {ssh} "mkdir /root/cwm-worker-cluster" &&\
+                            {scp} -r {cwm_worker_cluster_path}/bin root@{ip}:/root/cwm-worker-cluster/bin &&\
                             {scp} -r {cwm_worker_cluster_path}/clusters root@{ip}:/root/cwm-worker-cluster/clusters &&\
                             {scp} -r {cwm_worker_cluster_path}/cwm_worker_cluster root@{ip}:/root/cwm-worker-cluster/cwm_worker_cluster &&\
+                            {scp} -r {cwm_worker_cluster_path}/test_instances root@{ip}:/root/cwm-worker-cluster/test_instances &&\
                             {scp} -r {cwm_worker_cluster_path}/tests root@{ip}:/root/cwm-worker-cluster/tests &&\
                             {scp} {cwm_worker_cluster_path}/setup.py root@{ip}:/root/cwm-worker-cluster/setup.py &&\
+                            {scp} {cwm_worker_cluster_path}/requirements-prod.txt root@{ip}:/root/cwm-worker-cluster/requirements-prod.txt &&\
                             {ssh} "cd /root/cwm-worker-cluster && docker build -t tests -f tests/Dockerfile --build-arg CWM_WORKER_TESTS_VERSION=`date +%s` ."
                         '''.format(ip=ip, ssh=ssh, scp=scp, cwm_worker_cluster_path=cwm_worker_cluster_path))
     assert ret == 0, out

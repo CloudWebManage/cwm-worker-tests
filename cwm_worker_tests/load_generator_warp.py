@@ -3,7 +3,7 @@ import uuid
 import datetime
 import subprocess
 
-from cwm_worker_cluster import config
+from cwm_worker_cluster.test_instance import api as test_instance_api
 
 
 def assert_warp_version():
@@ -50,7 +50,7 @@ def get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, 
         concurrency=concurrency,
         obj_size=obj_size,
         benchdatafilename=benchdatafilename,
-        deployment_warp_args=config.get_deployment_warp_args(method, domain_name),
+        deployment_warp_args=test_instance_api.get_deployment_warp_args_by_hostname(method, domain_name),
         method=method
     )
     return cmd, bucket_name

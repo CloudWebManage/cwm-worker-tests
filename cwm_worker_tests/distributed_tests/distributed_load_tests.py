@@ -12,10 +12,9 @@ import dataflows as DF
 import zstandard as zstd
 
 from cwm_worker_cluster import common
-from cwm_worker_cluster import config
-from cwm_worker_cluster import worker
-from cwm_worker_cluster import cluster
-from cwm_worker_tests.load_generator_custom import prepare_default_bucket, prepare_custom_bucket
+from cwm_worker_cluster.worker import api as worker_api
+from cwm_worker_cluster.cluster import api as cluster_api
+from cwm_worker_tests.load_generator_custom import prepare_default_bucket
 from cwm_worker_tests.distributed_tests import create_servers
 
 
@@ -25,11 +24,13 @@ BUCKET_INF = 'inf'
 
 
 def get_domain_name_from_num(domain_num):
-    return config.get_load_testing_domain_num_hostname(domain_num if domain_num < 5 else 1)
+    # return config.get_load_testing_domain_num_hostname(domain_num if domain_num < 5 else 1)
+    raise Exception("Using domain_num to determine hostname is not supported!")
 
 
 def get_worker_id_from_num(domain_num):
-    return config.get_load_testing_domain_num_worker_id(domain_num if domain_num < 5 else 1)
+    # return config.get_load_testing_domain_num_worker_id(domain_num if domain_num < 5 else 1)
+    raise Exception("Using domain_num to determinet worker_id is not supported!")
 
 
 def prepare_server_for_load_test(tempdir, server_ip):
@@ -102,10 +103,10 @@ def add_clear_worker(worker_id, hostname, node_ip, cluster_zone, root_progress, 
             node_ip = node['ip']
         volume_id = common.get_namespace_name_from_worker_id(worker_id)
         with progress.set_start_end('delete_worker_start', 'delete_worker_end'):
-            worker.delete(worker_id)
+            worker_api.delete(worker_id)
         if not skip_clear_volume:
             with progress.set_start_end('clear_worker_volume_start', 'clear_worker_volume_end'):
-                worker.clear_volume(volume_id)
+                worker_api.clear_volume(volume_id)
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")
@@ -133,30 +134,31 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
         node_ip = node['ip']
         print('node_name={} node_ip={}'.format(node_name, node_ip))
         if not prepare_domain_names:
-            prepare_domain_names = {}
-            eu_load_test_domain_nums = set()
-            for server_num in servers.keys():
-                eu_load_test_domain_nums.add(server_num if server_num < 5 else 1)
-            for eu_load_test_domain_num in eu_load_test_domain_nums:
-                hostname = get_domain_name_from_num(eu_load_test_domain_num)
-                worker_id = get_worker_id_from_num(eu_load_test_domain_num)
-                prepare_domain_names[worker_id] = hostname
+            raise Exception("Not using specific predefined domain_names in prepare_domain_names is not supported")
+            # prepare_domain_names = {}
+            # eu_load_test_domain_nums = set()
+            # for server_num in servers.keys():
+            #     eu_load_test_domain_nums.add(server_num if server_num < 5 else 1)
+            # for eu_load_test_domain_num in eu_load_test_domain_nums:
+            #     hostname = get_domain_name_from_num(eu_load_test_domain_num)
+            #     worker_id = get_worker_id_from_num(eu_load_test_domain_num)
+            #     prepare_domain_names[worker_id] = hostname
         delete_worker_ids = set(prepare_domain_names.keys())
         for i in range(1, 50):
             delete_worker_ids.add(get_worker_id_from_num(i))
         for worker_id in delete_worker_ids:
             with progress.set_start_end('worker_delete_start_{}'.format(worker_id), 'worker_delete_end_{}'.format(worker_id)):
-                worker.delete(worker_id)
+                worker_api.delete(worker_id)
         if not skip_clear_volume:
             for worker_id, hostname in prepare_domain_names.items():
                 volume_id = common.get_namespace_name_from_worker_id(worker_id)
                 with progress.set_start_end('clear_worker_volume_start_{}'.format(volume_id), 'clear_worker_volume_end_{}'.format(volume_id)):
-                    worker.clear_volume(volume_id)
+                    worker_api.clear_volume(volume_id)
         if not skip_wait_inactive_namespaces:
             print("Waiting for inactive namespaces...")
             while True:
                 num_inactive_namespaces = 0
-                for namespace in cluster.iterate_inactive_namespaces():
+                for namespace in cluster_api.iterate_inactive_namespaces():
                     num_inactive_namespaces += 1
                     print(namespace)
                 if num_inactive_namespaces > 0:
@@ -182,8 +184,8 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
 
 def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator=False):
     with root_progress.start_sub(__spec__.name, 'prepare_custom_load_generator') as progress:
-        worker_id_servers = {}
-        worker_id_hostnames = {}
+        # worker_id_servers = {}
+        # worker_id_hostnames = {}
         objects, duration_seconds, concurrency, obj_size_kb = None, None, None, None
         for server_num, server in servers.items():
             if not server['custom_load_options'].get('bucket_name'):
@@ -204,10 +206,11 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                 else:
                     assert int(server['obj_size_kb']) == obj_size_kb
                 if not prepare_domain_names:
-                    hostname = get_domain_name_from_num(server_num if server_num < 5 else 1)
-                    worker_id = get_worker_id_from_num(server_num if server_num < 5 else 1)
-                    worker_id_servers.setdefault(worker_id, []).append(server)
-                    worker_id_hostnames[worker_id] = hostname
+                    raise Exception("must use specific predefined domain_names in prepare_domain_names")
+                    # hostname = get_domain_name_from_num(server_num if server_num < 5 else 1)
+                    # worker_id = get_worker_id_from_num(server_num if server_num < 5 else 1)
+                    # worker_id_servers.setdefault(worker_id, []).append(server)
+                    # worker_id_hostnames[worker_id] = hostname
         if prepare_domain_names:
             assert use_default_bucket
             print("preparing custom load generator using the default bucket for all domain names / servers")
@@ -234,16 +237,17 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                 server['custom_load_options']['use_default_bucket'] = True
                 server['custom_load_options']['skip_prepare_bucket'] = True
         else:
-            assert not use_default_bucket
-            for worker_id in worker_id_servers.keys():
-                hostname = worker_id_hostnames[worker_id]
-                print("preparing custom load generator for worker {}".format(worker_id))
-                assert not skip_prepare_load_generator, "Cannot skip_prepare_load_generator when not using default bucket"
-                with progress.set_start_end('prepare_custom_bucket_start_{}'.format(worker_id), 'prepare_custom_bucket_end_{}'.format(worker_id)):
-                    bucket_name = prepare_custom_bucket('https', worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb)
-                for server in worker_id_servers[worker_id]:
-                    server['custom_load_options']['bucket_name'] = bucket_name
-                    server['custom_load_options']['use_default_bucket'] = False
+            raise Exception('must have domain in prepare_domain_names')
+            # assert not use_default_bucket
+            # for worker_id in worker_id_servers.keys():
+            #     hostname = worker_id_hostnames[worker_id]
+            #     print("preparing custom load generator for worker {}".format(worker_id))
+            #     assert not skip_prepare_load_generator, "Cannot skip_prepare_load_generator when not using default bucket"
+            #     with progress.set_start_end('prepare_custom_bucket_start_{}'.format(worker_id), 'prepare_custom_bucket_end_{}'.format(worker_id)):
+            #         bucket_name = prepare_custom_bucket('https', worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb)
+            #     for server in worker_id_servers[worker_id]:
+            #         server['custom_load_options']['bucket_name'] = bucket_name
+            #         server['custom_load_options']['use_default_bucket'] = False
 
 
 def post_delete_cleanup(servers, create_servers_stats):
@@ -286,8 +290,9 @@ def run_distributed_load_tests(servers, load_generator, prepare_domain_names, ro
             if prepare_domain_names:
                 use_default_bucket = True
             else:
-                assert not custom_load_options.get('use_default_bucket')
-                use_default_bucket = False
+                raise Exception('must have prepare_domain_names')
+                # assert not custom_load_options.get('use_default_bucket')
+                # use_default_bucket = False
             prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator)
         create_servers_stats = {}
         with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress) as (tempdir, servers):
@@ -412,6 +417,24 @@ def csv_decompress(csv_compression_method, csv_compressed_filename, csv_filename
         csv_decompress_zst(csv_compressed_filename, csv_filename)
     else:
         csv_decompress_gz(csv_compressed_filename, csv_filename)
+
+
+def get_datacenter(endpoint, base_servers_all_zone):
+    if base_servers_all_zone:
+        return base_servers_all_zone
+    else:
+        # we can't determine the zone based on endpoint
+        return '??'
+    # {
+    #     'http://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
+    #     'https://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
+    #     'http://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
+    #     'https://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
+    #     'http://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
+    #     'https://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
+    #     'http://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
+    #     'https://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
+    # }.get(endpoint, '??') if not base_servers_all_zone else base_servers_all_zone
 
 
 def aggregate_test_results(servers, total_duration_seconds, base_servers_all_zone, only_test_method, load_generator):
@@ -571,16 +594,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_zon
             all_ops_total_megabytes = all_ops_total_bytes / 1024 / 1024
             output_row = {
                 'endpoint': endpoint,
-                'datacenter': {
-                    'http://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
-                    'https://{}'.format(config.get_load_testing_domain_num_hostname(1)): 'EU',
-                    'http://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
-                    'https://{}'.format(config.get_load_testing_domain_num_hostname(2)): 'IL',
-                    'http://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
-                    'https://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
-                    'http://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
-                    'https://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
-                }.get(endpoint, '??') if not base_servers_all_zone else base_servers_all_zone,
+                'datacenter': get_datacenter(endpoint, base_servers_all_zone),
                 'total-percent-errors': (all_ops_total_errors / all_ops_total_requests * 100) if all_ops_total_requests > 0 else 0,
                 'total-requests-per-second': all_ops_total_requests / total_duration_seconds,
                 'total-successful-requests-per-second': all_ops_total_successful_requests / total_duration_seconds,

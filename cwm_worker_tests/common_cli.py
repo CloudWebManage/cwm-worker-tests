@@ -2,7 +2,6 @@ import json
 import click
 import base64
 
-from cwm_worker_cluster import config
 import cwm_worker_tests.load_test
 
 
@@ -29,8 +28,8 @@ class LoadGeneratorRunCommand(click.Command):
             callback=self.load_generator_run_callback,
             params=[
                 click.Option(['--method'], default='http', type=str, show_default=True),
-                click.Option(['--worker-id'], default=config.LOAD_TESTING_WORKER_ID, type=str, show_default=True),
-                click.Option(['--hostname'], default=config.LOAD_TESTING_DOMAIN, type=str, show_default=True),
+                click.Option(['--worker-id'], type=str),
+                click.Option(['--hostname'], type=str),
                 click.Option(['--objects'], default=10, type=int, show_default=True),
                 click.Option(['--duration-seconds'], default=10, type=int, show_default=True),
                 click.Option(['--concurrency'], default=6, type=int, show_default=True),

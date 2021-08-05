@@ -112,13 +112,11 @@ def distributed_load_test_multi(tests_config):
             "load_generator": "custom",
             "concurrency": 1,
             "num_extra_eu_servers": 4,
-            "number_of_random_domain_names": 7,
             "make_put_or_del_every_iterations": 1000
         },
         "multi_values": {
             "concurrency": [1,5],
-            "num_extra_eu_servers": [1,4],
-            "number_of_random_domain_names": [3, 5, 7]
+            "num_extra_eu_servers": [1,4]
         },
         "tests": [
             {"obj_size_kb": 100, "make_put_or_del_every_iterations": 1000},
@@ -126,8 +124,7 @@ def distributed_load_test_multi(tests_config):
             {"obj_size_kb": 10000, "make_put_or_del_every_iterations": 20000}
         ],
         "custom_load_options": {
-            "test_all_external_gateways": false,
-            "test_all_cluster_zone": null
+            "test_all_cluster_zone": true
         },
         "dry_run": true,
         "stop_on_error": true

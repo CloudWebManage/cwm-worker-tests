@@ -9,6 +9,7 @@ from cwm_worker_cluster import config
 from cwm_worker_cluster import common
 from cwm_worker_tests.distributed_tests import distributed_load_tests
 from cwm_worker_tests.distributed_tests.progress import RootProgress
+from cwm_worker_cluster.test_instance import api as test_instance_api
 
 
 def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, num_extra_eu_servers:int,
@@ -28,27 +29,31 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
         assert load_generator in ['warp', 'custom']
         if load_generator == 'custom' and 'random_domain_names' not in custom_load_options:
             if custom_load_options.get('test_all_external_gateways'):
-                assert not custom_load_options.get('number_of_random_domain_names'), 'cannot specify number_of_random_domain_names with test_all_external_gateways'
-                assert not custom_load_options.get('test_all_cluster_zone'), 'cannot specify test_all_cluster_zone and test_all_external_gateways'
-                custom_load_options['random_domain_names'] = {
-                    dnc['worker_id']: dnc['hostname']
-                    for dnc in config.LOAD_TESTING_GATEWAYS.values() if dnc['type'] not in ['mock_geo', 'cwm']
-                }
+                raise Exception('load testing external gateways is not supported yet')
+                # assert not custom_load_options.get('number_of_random_domain_names'), 'cannot specify number_of_random_domain_names with test_all_external_gateways'
+                # assert not custom_load_options.get('test_all_cluster_zone'), 'cannot specify test_all_cluster_zone and test_all_external_gateways'
+                # custom_load_options['random_domain_names'] = {
+                #     dnc['worker_id']: dnc['hostname']
+                #     for dnc in config.LOAD_TESTING_GATEWAYS.values() if dnc['type'] not in ['mock_geo', 'cwm']
+                # }
             elif custom_load_options.get('test_all_cluster_zone'):
+                cluster_zone = common.get_cluster_zone()
                 custom_load_options['random_domain_names'] = {
-                    dnc['worker_id']: dnc['hostname']
-                    for dnc in config.LOAD_TESTING_CLUSTERS[custom_load_options['test_all_cluster_zone']]
+                    test_instance['worker_id']: test_instance['hostname']
+                    for test_instance in test_instance_api.iterate(cluster_zone, test_instance_api.ROLE_LOAD_TEST)
                 }
             else:
-                custom_load_options['random_domain_names'] = {
-                    config.get_load_testing_domain_num_worker_id(i+1): config.get_load_testing_domain_num_hostname(i+1)
-                    for i in range(int(custom_load_options.get('number_of_random_domain_names', 7)))
-                }
+                raise Exception('load testing using number_of_random_domain_names is not supported')
+                # custom_load_options['random_domain_names'] = {
+                #     config.get_load_testing_domain_num_worker_id(i+1): config.get_load_testing_domain_num_hostname(i+1)
+                #     for i in range(int(custom_load_options.get('number_of_random_domain_names', 7)))
+                # }
         if custom_load_options.get('random_domain_names'):
             assert load_generator == 'custom', 'random domain names is only supported for custom load generator'
             prepare_domain_names = custom_load_options['random_domain_names']
         else:
-            prepare_domain_names = None
+            raise Exception('must have prepare_domain_names')
+            # prepare_domain_names = None
         start_time = datetime.datetime.now()
         print('{} start'.format(start_time))
         if num_base_servers > 4:

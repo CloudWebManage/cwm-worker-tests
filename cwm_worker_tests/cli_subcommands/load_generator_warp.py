@@ -1,6 +1,5 @@
 import click
 
-from cwm_worker_cluster import config
 from cwm_worker_tests import common_cli
 import cwm_worker_tests.load_test
 
@@ -12,8 +11,8 @@ def warp():
 
 @warp.command()
 @click.option('--method', default='http', type=str)
-@click.option('--worker-id', default=config.LOAD_TESTING_WORKER_ID, type=str)
-@click.option('--hostname', default=config.LOAD_TESTING_DOMAIN, type=str)
+@click.option('--worker-id', type=str)
+@click.option('--hostname', type=str)
 @click.option('--objects', default=10, type=int)
 @click.option('--duration-seconds', default=10, type=int)
 @click.option('--concurrency', default=6, type=int)
