@@ -10,7 +10,7 @@ from collections import defaultdict
 
 import dataflows as DF
 
-from cwm_worker_cluster import config
+from cwm_worker_cluster import config, common
 import cwm_worker_tests.distributed_load_test
 from cwm_worker_tests.multi_dict_generator import multi_dict_generator
 
@@ -291,5 +291,5 @@ def main(tests_config):
         if not ok and stop_on_error:
             break
     pprint(results)
-    aggregate_multi_test_stats(cluster_zone=custom_load_options.get('test_all_cluster_zone'))
+    aggregate_multi_test_stats(cluster_zone=common.get_cluster_zone())
     exit(0 if all([r['ok'] for r in results.values()]) else 1)

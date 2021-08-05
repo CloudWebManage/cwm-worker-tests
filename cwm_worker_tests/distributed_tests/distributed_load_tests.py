@@ -55,8 +55,8 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
                      '--load_generator {load_generator} --custom-load-options {custom_load_options}'.format(
         objects=objects,
         duration_seconds=duration_seconds,
-        hostname=get_domain_name_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
-        worker_id=get_worker_id_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
+        hostname="",  # get_domain_name_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
+        worker_id="",  # get_worker_id_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
         concurrency=concurrency,
         obj_size_kb=obj_size_kb,
         protocol=protocol,
@@ -144,8 +144,8 @@ def add_clear_workers(servers, prepare_domain_names, root_progress, skip_clear_v
             #     worker_id = get_worker_id_from_num(eu_load_test_domain_num)
             #     prepare_domain_names[worker_id] = hostname
         delete_worker_ids = set(prepare_domain_names.keys())
-        for i in range(1, 50):
-            delete_worker_ids.add(get_worker_id_from_num(i))
+        # for i in range(1, 50):
+        #     delete_worker_ids.add(get_worker_id_from_num(i))
         for worker_id in delete_worker_ids:
             with progress.set_start_end('worker_delete_start_{}'.format(worker_id), 'worker_delete_end_{}'.format(worker_id)):
                 worker_api.delete(worker_id)
