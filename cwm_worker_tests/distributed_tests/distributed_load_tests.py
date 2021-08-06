@@ -11,7 +11,7 @@ from collections import defaultdict
 import dataflows as DF
 import zstandard as zstd
 
-from cwm_worker_cluster import common
+from cwm_worker_cluster import common, config
 from cwm_worker_cluster.worker import api as worker_api
 from cwm_worker_cluster.cluster import api as cluster_api
 from cwm_worker_tests.load_generator_custom import prepare_default_bucket
@@ -39,7 +39,7 @@ def prepare_server_for_load_test(tempdir, server_ip):
     ret, out = subprocess.getstatusoutput('''
         {ssh} "docker rm -f load_test_https; docker rm -f load_test_http; rm -rf /root/cwm-worker-cluster/.output" &&\
         {ssh} "mkdir /root/cwm-worker-cluster/.output" &&\
-        {scp} $KUBECONFIG root@{ip}:/root/cwm-worker-cluster/.kubeconfig
+        {scp} -r /etc/kamatera root@{ip}:/etc/kamatera
     '''.format(ssh=ssh, scp=scp, ip=server_ip))
     assert ret == 0, out
 
@@ -65,8 +65,8 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
     )
     print("test_load_args: {}".format(test_load_args))
     ret, out = subprocess.getstatusoutput('''
-        {ssh} "docker run --name load_test_{protocol} -d --entrypoint bash -e KUBECONFIG=/kube/.config -v /root/cwm-worker-cluster/.kubeconfig:/kube/.config -v /root/cwm-worker-cluster/.output:/output tests -c \'cwm-worker-tests load-test {test_load_args} 2>&1\'"
-    '''.format(scp=scp, ssh=ssh, test_load_args=test_load_args, ip=server_ip, num=load_test_domain_num, protocol=protocol))
+        {ssh} "docker run --name load_test_{protocol} -d -e CLUSTER_NAME={cluster_name} -v /etc/kamatera:/etc/kamatera -v /root/cwm-worker-cluster/.output:/output tests cwm-worker-tests load-test {test_load_args} 2>&1"
+    '''.format(scp=scp, ssh=ssh, test_load_args=test_load_args, ip=server_ip, num=load_test_domain_num, protocol=protocol, cluster_name=config.assert_connected_cluster_name()))
     assert ret == 0, out
 
 
