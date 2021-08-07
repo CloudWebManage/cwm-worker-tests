@@ -49,14 +49,12 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
     print("Running {} load tests from server {} load_test_domain_num={} load_generator={}".format(protocol, server_name, load_test_domain_num, load_generator))
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
-    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} --worker-id \\"{worker_id}\\" --hostname \\"{hostname}\\" ' \
+    test_load_args = '--objects {objects} --duration-seconds {duration_seconds} ' \
                      '--skip-delete-worker --skip-clear-volume --concurrency {concurrency} --obj-size-kb {obj_size_kb} ' \
                      '--benchdatafilename /output/warp-bench-data --skip_add_worker --protocol {protocol} ' \
                      '--load_generator {load_generator} --custom-load-options {custom_load_options}'.format(
         objects=objects,
         duration_seconds=duration_seconds,
-        hostname="",  # get_domain_name_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
-        worker_id="",  # get_worker_id_from_num(load_test_domain_num) if not custom_load_options.get('random_domain_names') else "",
         concurrency=concurrency,
         obj_size_kb=obj_size_kb,
         protocol=protocol,
