@@ -33,7 +33,8 @@ def assert_load_test(worker_id, hostname, objects, duration_seconds, concurrency
 
 def main(objects:int, duration_seconds:int, worker_id:str, hostname:str, skip_delete_worker:bool, skip_clear_volume:bool,
          eu_load_test_domain_num:int, concurrency:int, obj_size_kb:int, benchdatafilename:str,
-         skip_add_worker:bool, protocol:str, load_generator:str, custom_load_options:dict):
+         skip_add_worker:bool, protocol:str, load_generator:str, custom_load_options:dict,
+         skip_clear_cache=False):
     if custom_load_options.get('random_domain_names'):
         assert not worker_id and not hostname and not eu_load_test_domain_num, "when using random domain names, specific worker / hostname params are not allowed"
         assert load_generator != 'warp', 'warp load_generator does not support random domain names'
@@ -66,7 +67,7 @@ def main(objects:int, duration_seconds:int, worker_id:str, hostname:str, skip_de
         print("Sleeping 5 seconds to ensure everything is ready...")
         time.sleep(5)
         print("Warming up the site")
-        pprint(common.assert_site(worker_id, hostname, node_ip))
+        pprint(common.assert_site(worker_id, hostname, node_ip, skip_clear_volume=skip_clear_volume, skip_clear_cache=skip_clear_cache))
     if not protocol or protocol == 'http':
         assert_load_test(worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb, benchdatafilename,
                          'http', load_generator, custom_load_options)
