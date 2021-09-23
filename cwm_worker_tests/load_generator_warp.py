@@ -59,12 +59,16 @@ def get_warp_cmd(method, domain_name, objects, duration, concurrency, obj_size, 
 def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb,
         benchdatafilename, custom_load_options=None, use_default_bucket=False):
     assert not use_default_bucket, 'use_default_bucket is not supported for warp load generator'
+    if worker_id and not hostname:
+        hostname = test_instance_api.get_by_worker_id(worker_id)['hostname']
+        print("Using hostname: {}".format(hostname))
     duration = '{}s'.format(duration_seconds)
     obj_size = '{}KiB'.format(obj_size_kb)
     start_time = datetime.datetime.now()
     max_prepare_server_seconds = int(duration_seconds / 5)
     assert_warp_version()
     cmd, bucket_name = get_warp_cmd(method, hostname, objects, duration, concurrency, obj_size, benchdatafilename)
+    # print(cmd)
     ret, out = subprocess.getstatusoutput(cmd)
     while ret != 0 and is_warp_preparing_server_error(out):
         elapsed_seconds = (datetime.datetime.now() - start_time).total_seconds()

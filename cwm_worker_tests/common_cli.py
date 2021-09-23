@@ -28,12 +28,12 @@ class LoadGeneratorRunCommand(click.Command):
             callback=self.load_generator_run_callback,
             params=[
                 click.Option(['--method'], default='http', type=str, show_default=True),
-                click.Option(['--worker-id'], type=str),
-                click.Option(['--hostname'], type=str),
-                click.Option(['--objects'], default=10, type=int, show_default=True),
-                click.Option(['--duration-seconds'], default=10, type=int, show_default=True),
-                click.Option(['--concurrency'], default=6, type=int, show_default=True),
-                click.Option(['--obj-size-kb'], default=10, type=int, show_default=True),
+                click.Option(['--worker-id'], type=str, help='test instance worker id, if specified, hostname is not required'),
+                click.Option(['--hostname'], type=str, help='test instance hostname, if specified, worker id is not required'),
+                click.Option(['--objects'], default=10, type=int, show_default=True, help='number of objects to test with'),
+                click.Option(['--duration-seconds'], default=10, type=int, show_default=True, help='duration in seconds'),
+                click.Option(['--concurrency'], default=6, type=int, show_default=True, help='number of load generation threads to start'),
+                click.Option(['--obj-size-kb'], default=10, type=int, show_default=True, help='object size in kb'),
                 click.Option(['--benchdatafilename'], type=str, help="optional file to save with benchdata"),
                 click.Option(['--custom-load-options'], type=str, help="json string or base64 encoded json string prefixed with 'b64:'"),
                 click.Option(['--use-default-bucket'], is_flag=True, help="use a default bucket, verify it is valid and prepare only if needed")

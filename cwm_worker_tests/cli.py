@@ -21,6 +21,7 @@ def main():
 
 @main.group()
 def load_generator():
+    """multi-threaded load generators"""
     pass
 
 
