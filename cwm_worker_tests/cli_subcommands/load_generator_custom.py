@@ -39,17 +39,22 @@ def prepare_custom_bucket(**kwargs):
 @click.option('--num-test-instances', type=int, help='number of random instances to generate load for', default=5, show_default=True)
 @click.option('--test-instances-zones', help='comma-separated list of test instance zones to test with, if not provided - tests all zones')
 @click.option('--test-instances-roles', help='comma-separated list of test instance roles to test with', default='loadtest', show_default=True)
+@click.option('--test-instances-worker-ids', help='comma-separated list of test instance worker ids to test with')
 @click.option('--objects', type=int, default=10, show_default=True, help='number of objects to test with')
 @click.option('--duration-seconds', type=int, default=10, show_default=True, help='duration in seconds of the test')
 @click.option('--concurrency', type=int, default=6, show_default=True, help='test concurrency')
 @click.option('--obj-size-kb', type=int, default=1, show_default=True, help='object size in kb')
 @click.option('--benchdatafilename', default='custom-bench-data', help='write results to this file', show_default=True)
 @click.option('--benchdata-format', type=click.Choice(['csv.gz', 'csv']), default='csv.gz', show_choices=True, show_default=True, help='format of the results file')
-@click.option('--skip-prepare-bucket', is_flag=True, help="don't prepare the bucket, assuming it was prepared beforehand for all relevant test instances with prepare_default_bucket_multi")
 @click.option('--do-cached-get', is_flag=True, help="Make unauthenticated HTTP GET requests which will go via the cdn cache layer")
+@click.option('--test-instances-random', is_flag=True, help="Randomize the list of test instances")
 def run_multi(**kwargs):
+    """Generates load on test instances, each load thread will choose an instance in random
+
+    Must prepare the default bucket for all test instances beforehand using prepare-default-bucket-multi command"""
     kwargs['test_instances_zones'] = [s.strip() for s in kwargs['test_instances_zones'].split(',') if s.strip()] if kwargs.get('test_instances_zones') else []
     kwargs['test_instances_roles'] = [s.strip() for s in kwargs['test_instances_roles'].split(',') if s.strip()] if kwargs.get('test_instances_roles') else []
+    kwargs['test_instances_worker_ids'] = [s.strip() for s in kwargs['test_instances_worker_ids'].split(',') if s.strip()] if kwargs.get('test_instances_worker_ids') else []
     out, bucket_name = load_generator_custom.run_multi(**kwargs)
     print('bucket_name={}'.format(bucket_name))
     print(out)
@@ -64,7 +69,9 @@ def run_multi(**kwargs):
 @click.option('--concurrency', type=int, default=6, show_default=True, help='concurrency to prepare the bucket for')
 @click.option('--obj_size_kb', type=int, default=1, show_default=True, help='object size in kb to preapre the bucket for')
 @click.option('--upload-concurrency', type=int, help='number of threads to start for uploading objects to the bucket')
+@click.option('--test-instances-worker-ids', help='comma-separated list of test instance worker ids to test with')
 def prepare_default_bucket_multi(**kwargs):
     kwargs['test_instances_zones'] = [s.strip() for s in kwargs['test_instances_zones'].split(',') if s.strip()] if kwargs.get('test_instances_zones') else []
     kwargs['test_instances_roles'] = [s.strip() for s in kwargs['test_instances_roles'].split(',') if s.strip()] if kwargs.get('test_instances_roles') else []
+    kwargs['test_instances_worker_ids'] = [s.strip() for s in kwargs['test_instances_worker_ids'].split(',') if s.strip()] if kwargs.get('test_instances_worker_ids') else []
     load_generator_custom.prepare_default_bucket_multi(**kwargs)
