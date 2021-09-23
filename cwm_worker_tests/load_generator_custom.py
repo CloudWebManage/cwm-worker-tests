@@ -1,4 +1,5 @@
 import uuid
+import json
 import time
 import random
 import urllib3
@@ -10,6 +11,7 @@ from threading import Thread, Lock
 from collections import defaultdict
 
 import boto3
+import requests
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
@@ -99,6 +101,24 @@ class RunCustomThread(Thread):
         self.write_benchdata('STAT', 0, object.key, head_request_error, start_end_duration, domain_name)
         return not head_request_error
 
+    def make_cached_get_request(self, filename, domain_name):
+        self.stats['num_cached_get_requests'] += 1
+        cached_get_request_error = None
+        with get_start_end_duration_ns() as start_end_duration:
+            try:
+                res = requests.get(
+                    '{}://{}/{}/{}'.format(self.method, domain_name, self.domain_name_buckets[domain_name], filename),
+                    stream=True
+                )
+                obj_size = sum(len(data) for data in res.iter_content(chunk_size=1))
+            except Exception as e:
+                cached_get_request_error = str(e)
+        if not cached_get_request_error:
+            if obj_size != self.obj_size_kb * 1024:
+                cached_get_request_error = "invalid object size"
+        self.write_benchdata('CACHED_GET', obj_size, filename, cached_get_request_error, start_end_duration, domain_name)
+        return not cached_get_request_error
+
     def make_get_request(self, object, domain_name):
         self.stats['num_get_requests'] += 1
         get_request_error = None
@@ -154,6 +174,9 @@ class RunCustomThread(Thread):
         domain_name = random.choice(list(self.domain_name_buckets.keys()))
         return domain_name, self.get_bucket(domain_name)
 
+    def get_domain_name(self):
+        return random.choice(list(self.domain_name_buckets.keys()))
+
     def run(self):
         make_put_or_del_every_iterations = self.custom_load_options.get('make_put_or_del_every_iterations', 100)
         start_time = datetime.datetime.now()
@@ -162,13 +185,19 @@ class RunCustomThread(Thread):
                 if (datetime.datetime.now() - start_time).total_seconds() > self.duration_seconds:
                     break
                 self.stats['num_object_iterations'] += 1
-                domain_name, bucket = self.get_domain_name_bucket()
-                object = bucket.Object('file{}.rnd'.format(i+1))
-                if self.make_head_request(object, domain_name):
-                    if not self.make_get_request(object, domain_name):
-                        self.stats['num_get_errors'] += 1
+                filename = 'file{}.rnd'.format(i+1)
+                if self.custom_load_options.get('do_cached_get'):
+                    domain_name = self.get_domain_name()
+                    if not self.make_cached_get_request(filename, domain_name):
+                        self.stats['num_cached_get_errors'] += 1
                 else:
-                    self.stats['num_head_errors'] += 1
+                    domain_name, bucket = self.get_domain_name_bucket()
+                    object = bucket.Object(filename)
+                    if self.make_head_request(object, domain_name):
+                        if not self.make_get_request(object, domain_name):
+                            self.stats['num_get_errors'] += 1
+                    else:
+                        self.stats['num_head_errors'] += 1
                 if make_put_or_del_every_iterations and self.stats['num_object_iterations'] % (int(self.objects / make_put_or_del_every_iterations) + 1) == 0:
                     self.make_put_or_del_request()
         self.stats['elapsed_seconds'] = (datetime.datetime.now() - start_time).total_seconds()
@@ -202,12 +231,31 @@ def prepare_custom_bucket(method, worker_id, hostname, objects=10, duration_seco
     if not skip_create_bucket:
         try:
             s3.create_bucket(Bucket=bucket_name)
+            time.sleep(10)
         except ClientError as e:
             if e.response['Error']['Code'] == 'BucketAlreadyOwnedByYou':
                 print('got botocore ClientError "BucketAlreadyOwnedByYou", this is probably fine')
             else:
                 raise
-        time.sleep(10)
+        s3.BucketPolicy(bucket_name).put(
+            Policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+                        "Resource": ["arn:aws:s3:::{}".format(bucket_name)]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetObject"],
+                        "Resource": ["arn:aws:s3:::{}/*".format(bucket_name)]
+                    }
+                ]
+            })
+        )
     print("Uploading {} files, {} kb each".format(objects if only_upload_filenums is None else len(only_upload_filenums), obj_size_kb))
     filenums_iterator = range(int(objects)) if only_upload_filenums is None else (int(i)-1 for i in only_upload_filenums)
     if delete_keys:
@@ -253,7 +301,7 @@ def get_default_bucket_name(obj_size_kb):
     return '{}-{}kb'.format(DEFAULT_BUCKET_NAME, obj_size_kb)
 
 
-def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False):
+def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False, upload_concurrency=5):
     bucket_name = get_default_bucket_name(obj_size_kb)
     bucket = get_s3_resource(method, hostname, with_retries=True).Bucket(bucket_name)
     bucket.load()
@@ -273,11 +321,15 @@ def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, wi
             delete_threadkeys.add(object.key)
     if len(missing_filenums) > 0 or len(delete_threadkeys) > 0:
         prepare_custom_bucket(method, worker_id, hostname, obj_size_kb=obj_size_kb, bucket_name=bucket_name,
-                              skip_create_bucket=True, only_upload_filenums=missing_filenums, delete_keys=delete_threadkeys)
+                              skip_create_bucket=True, only_upload_filenums=missing_filenums, delete_keys=delete_threadkeys,
+                              upload_concurrency=upload_concurrency)
 
 
 def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb,
-        benchdatafilename, custom_load_options=None, use_default_bucket=False):
+        benchdatafilename, custom_load_options=None, use_default_bucket=False,
+        benchdata_format=None):
+    if not benchdata_format:
+        benchdata_format = 'csv.gz'
     assert method in ['http', 'https'], "invalid method: {}".format(method)
     if not custom_load_options.get('random_domain_names'):
         assert worker_id and hostname, "missing worker_id or hostname arguments"
@@ -344,7 +396,7 @@ def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj
                 if threads[i].is_alive():
                     is_alive = True
                     break
-    if benchdatafilename:
+    if benchdatafilename and benchdata_format == 'csv.gz':
         print("Compressing benchdata file")
         ret, out = subprocess.getstatusoutput("gzip -fq {}.{}.csv".format(benchdatafilename, method))
         assert ret == 0, out
@@ -371,3 +423,42 @@ def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj
     elapsed_seconds = (datetime.datetime.now() - start_time).total_seconds()
     out = "Completed in {} seconds".format(elapsed_seconds)
     return out, bucket_name
+
+
+def run_multi(method, num_test_instances, test_instances_zones, test_instances_roles, objects, duration_seconds, concurrency,
+              obj_size_kb, benchdatafilename, skip_prepare_bucket=False, make_put_or_del_every_iterations=100,
+              benchdata_format=None, do_cached_get=False):
+    test_instances = []
+    for test_instance in test_instance_api.iterate_all():
+        if test_instances_zones and test_instance['zone'] not in test_instances_zones:
+            continue
+        if test_instances_roles and test_instance['role'] not in test_instances_roles:
+            continue
+        test_instances.append(test_instance)
+    random.shuffle(test_instances)
+    test_instances = test_instances[:num_test_instances]
+    print('selected test instances:')
+    for t in test_instances:
+        print('{} {:^15} {}'.format(t['worker_id'], t['zone'], t['role']))
+    return run(
+        method, None, None, objects, duration_seconds, concurrency, obj_size_kb, benchdatafilename,
+        custom_load_options={
+            'random_domain_names': {test_instance['worker_id']: test_instance['hostname'] for test_instance in test_instances},
+            'use_default_bucket': True,
+            'skip_prepare_bucket': skip_prepare_bucket,
+            'make_put_or_del_every_iterations': make_put_or_del_every_iterations,
+            'do_cached_get': do_cached_get
+        },
+        benchdata_format=benchdata_format
+    )
+
+
+def prepare_default_bucket_multi(method, test_instances_zones, test_instances_roles, objects, duration_seconds, concurrency,
+                                 obj_size_kb, upload_concurrency):
+    for test_instance in test_instance_api.iterate_all():
+        if test_instances_zones and test_instance['zone'] not in test_instances_zones:
+            continue
+        if test_instances_roles and test_instance['role'] not in test_instances_roles:
+            continue
+        print("preparing default bucket for test instance {} ({} {})".format(test_instance['worker_id'], test_instance['zone'], test_instance['role']))
+        prepare_default_bucket(method, test_instance['worker_id'], test_instance['hostname'], objects, obj_size_kb, upload_concurrency=upload_concurrency)
