@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    paths-ignore:
+    - '**.md'
+jobs:
+  ci:
+    runs-on: ubuntu-20.04
+    steps:
+    - env:
+        CWM_WORKER_CLUSTER_DEPLOY_KEY: ${{ secrets.CWM_WORKER_CLUSTER_DEPLOY_KEY }}
+      run: |
+        curl -s https://raw.githubusercontent.com/CloudWebManage/uumpa-ci-toolbox/main/bin/github_actions_install.sh \
+          | bash -s 807a483b65f3ec28787300499d961338a9d6bc4a CloudWebManage/uumpa-ci-toolbox &&\
+        if [ "$(uci github actions get-branch-name)" == "main" ]; then
+          uci git checkout \
+            --github-repo-name CloudWebManage/cwm-worker-cluster \
+            --branch-name master \
+            --ssh-key "${CWM_WORKER_CLUSTER_DEPLOY_KEY}" \
+            --path cwm-worker-cluster \
+            --config-user-name cwm-worker-tests-ci &&\
+          cd cwm-worker-cluster &&\
+          echo "${GITHUB_SHA}" > cwm-worker-tests-commit.txt &&\
+          git add cwm-worker-tests-commit.txt &&\
+          git commit -m "automatic update of cwm-worker-tests --no-deploy" &&\
+          git push origin master
+        fi

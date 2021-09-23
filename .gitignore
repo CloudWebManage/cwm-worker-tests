@@ -8,3 +8,4 @@ warp-bench-data*
 .keep_servers.json
 .cloudcli.yaml
 .distributed-load-test-multi
+custom-bench-data.*
