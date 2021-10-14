@@ -121,6 +121,7 @@ class RunCustomThread(Thread):
     def make_get_request(self, object, domain_name):
         self.stats['num_get_requests'] += 1
         get_request_error = None
+        obj_size = 0
         with get_start_end_duration_ns() as start_end_duration:
             try:
                 obj_size = len(object.get()['Body'].read())
