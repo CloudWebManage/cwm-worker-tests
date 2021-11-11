@@ -297,12 +297,12 @@ def open_benchdata_file(benchdatafilename, method):
         yield None
 
 
-def get_default_bucket_name(obj_size_kb):
-    return '{}-{}kb'.format(DEFAULT_BUCKET_NAME, obj_size_kb)
+def get_default_bucket_name(obj_size_kb, objects):
+    return '{}-{}kb-{}'.format(DEFAULT_BUCKET_NAME, obj_size_kb, objects)
 
 
 def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False, upload_concurrency=5):
-    bucket_name = get_default_bucket_name(obj_size_kb)
+    bucket_name = get_default_bucket_name(obj_size_kb, objects)
     bucket = get_s3_resource(method, hostname, with_retries=True).Bucket(bucket_name)
     bucket.load()
     if not bucket.creation_date:
@@ -363,7 +363,7 @@ def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj
         assert not use_default_bucket, 'cannot use default bucket if you specified a bucket name'
         print("Using pre-prepared bucket {}".format(bucket_name))
     elif use_default_bucket:
-        bucket_name = get_default_bucket_name(obj_size_kb)
+        bucket_name = get_default_bucket_name(obj_size_kb, objects)
         print("Using default bucket: {}".format(bucket_name))
     else:
         assert not custom_load_options.get('random_domain_names'), 'bucket must be pre-prepared when using random domain names'
