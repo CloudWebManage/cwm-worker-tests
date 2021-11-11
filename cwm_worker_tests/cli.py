@@ -88,6 +88,8 @@ def distributed_load_test_aggregate_test_results(**kwargs):
 def distributed_load_test_multi(tests_config):
     """Run multiple distributed load tests
 
+    TESTS_CONFIG can be either the json itslef or a filename
+
     TESTS_CONFIG keys:
 
     defaults - default values for all tests (correspond to distributed load test arguments)

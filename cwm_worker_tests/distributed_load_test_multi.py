@@ -15,7 +15,7 @@ import cwm_worker_tests.distributed_load_test
 from cwm_worker_tests.multi_dict_generator import multi_dict_generator
 
 
-def run_test(testnum, test, dry_run, skip_add_clear_workers=False, skip_prepare_load_generator=False):
+def run_test(testnum, test, dry_run, skip_add_clear_workers=False, skip_prepare_load_generator=False, with_deploy=True):
     kwargs = dict(
         objects=test.get('objects', 10), duration_seconds=test.get('duration_seconds', 10),
         concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
@@ -29,7 +29,7 @@ def run_test(testnum, test, dry_run, skip_add_clear_workers=False, skip_prepare_
             'skip_add_clear_workers': skip_add_clear_workers,
             'skip_prepare_load_generator': skip_prepare_load_generator
         },
-        with_deploy=True if testnum == 1 else False
+        with_deploy=with_deploy if testnum == 1 else False
     )
     if dry_run:
         pprint(kwargs)
@@ -86,10 +86,10 @@ def check_skip_add_clear_workers(tests, testnum, add_clear_workers):
         return False
     cur_test = tests[testnum-1]
     if cur_test.get('add_clear_workers') == 'skip':
-        print("test {}: skipping add clear workers because add_clear_workers for this test is skip")
+        print("test {}: skipping add clear workers because add_clear_workers for this test is skip".format(testnum))
         return True
     if cur_test.get('add_clear_workers') == 'force':
-        print("test {}: forcing add clear workers because add_clear_workers for this test is force")
+        print("test {}: forcing add clear workers because add_clear_workers for this test is force".format(testnum))
         return False
     if testnum == 1:
         print("test {} is the first test, will not skip add clear workers".format(testnum))
@@ -278,7 +278,8 @@ def main(tests_config):
             run_test(
                 i, test, dry_run,
                 skip_add_clear_workers=check_skip_add_clear_workers(tests, i, add_clear_workers),
-                skip_prepare_load_generator=check_skip_prepare_load_generator(tests, i, prepare_load_generator)
+                skip_prepare_load_generator=check_skip_prepare_load_generator(tests, i, prepare_load_generator),
+                with_deploy=tests_config.get('with_deploy', True)
             )
         except:
             traceback.print_exc()

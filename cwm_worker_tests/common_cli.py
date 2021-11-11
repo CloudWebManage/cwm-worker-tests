@@ -1,3 +1,4 @@
+import os
 import json
 import click
 import base64
@@ -7,6 +8,9 @@ import cwm_worker_tests.load_test
 
 def parse_json_data(data):
     if data:
+        if os.path.exists(data):
+            with open(data) as f:
+                data = f.read()
         if not isinstance(data, dict):
             data = data.strip()
             if data.startswith('b64:'):
