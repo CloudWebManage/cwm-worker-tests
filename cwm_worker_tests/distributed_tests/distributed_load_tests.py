@@ -227,8 +227,16 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
                             traceback.print_exc()
                             if i <= 5:
                                 print("Failed to prepare default bucket for worker {}, will retry ({}/5)".format(worker_id, i))
+                                if i > 3:
+                                    print("recreating worker..")
+                                    common.assert_site(
+                                        worker_id, hostname,
+                                        skip_clear_cache=True, skip_clear_volume=True, skip_all=False,
+                                        protocols=['https']
+                                    )
+                                else:
+                                    time.sleep(5)
                                 i += 1
-                                time.sleep(5)
                             else:
                                 raise
             for server in servers.values():
