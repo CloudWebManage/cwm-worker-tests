@@ -159,14 +159,14 @@ def distributed_load_test_delete_kept_servers():
 
 
 @main.command(short_help='Run upload and/or download test with generated test files')
-@click.option('--endpoint', required=True, type=str, help='Endpoint of MinIO instance')
+@click.option('--endpoint', required=True, type=str, help='Endpoint of MinIO instance without protocol and path')
 @click.option('--access-key', required=True, type=str, help='Access key of MinIO instance')
 @click.option('--secret-key', required=True, type=str, help='Secret key of MinIO instance')
 @click.option('--bucket', required=True, type=str, help='Bucket name to upload to and download from')
 @click.option('--num-files', required=True, type=int, default=10, help='Number of files to upload/download')
 @click.option('--file-size', required=True, default=1024, type=int, help='Each file size in bytes')
-@click.option('--only-upload', is_flag=True, default=True, help='Only run the upload')
-@click.option('--only-download', is_flag=True, default=True, help='Only run the download')
+@click.option('--only-upload', is_flag=True, default=False, help='Only run the upload')
+@click.option('--only-download', is_flag=True, default=False, help='Only run the download')
 @click.option('--download-iterations', default=1, type=int, help='Number of iterations for downloading')
 @click.option('--download-threads', default=1, type=int, help='Number of threads for downloading')
 @click.option('--output-dir', default='warp', type=str, help='Path to output CSV files')
