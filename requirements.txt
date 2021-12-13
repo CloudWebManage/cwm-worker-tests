@@ -8,4 +8,4 @@ zstandard==0.14.0
 dataflows==0.2.0
 pytz==2021.1
 click==7.1.2
-minio=7.1.2
+minio==7.1.2
