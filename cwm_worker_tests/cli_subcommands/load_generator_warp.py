@@ -4,9 +4,9 @@ from cwm_worker_tests import common_cli
 import cwm_worker_tests.load_test
 
 
-@click.group()
+@click.group(short_help="Load generation based on MinIO warp load testing tool, supports only a single hostname")
 def warp():
-    """load generation based on Minio warp load testing tool, supports only a single hostname"""
+    """Load generation based on MinIO warp load testing tool, supports only a single hostname"""
     pass
 
 

@@ -4,23 +4,23 @@ from cwm_worker_tests import common_cli
 from cwm_worker_tests import load_generator_custom
 
 
-@click.group()
+@click.group(short_help="Load generation based on custom Python multi-threaded implementation")
 def custom():
-    """load generation based on custom Python multi-threaded implementation"""
+    """Load generation based on custom Python multi-threaded implementation"""
     pass
 
 
 custom.add_command(common_cli.LoadGeneratorRunCommand('custom'))
 
 
-@custom.command()
+@custom.command(short_help="Creates and uploads objects to a bucket in preparation for load generation")
 @click.option('--method', default='http', show_default=True, required=False)
 @click.option('--worker-id', help='test instance worker id, if specified, hostname is not required')
 @click.option('--hostname', help='test instance hostname, if specified, worker id is not required')
 @click.option('--objects', type=int, default=10, show_default=True, help='number of objects to prepare the bucket for')
 @click.option('--duration_seconds', type=int, default=10, show_default=True, help='duration in seconds of the test to prepare the bucket for')
 @click.option('--concurrency', type=int, default=6, show_default=True, help='concurrency to prepare the bucket for')
-@click.option('--obj_size_kb', type=int, default=1, show_default=True, help='object size in kb to preapre the bucket for')
+@click.option('--obj_size_kb', type=int, default=1, show_default=True, help='object size in kb to prepare the bucket for')
 @click.option('--bucket_name', type=str, help='name of the bucket to create and prepare')
 @click.option('--skip-delete-worker', is_flag=True, help="don't delete and recreate the worker before preparing the bucket")
 @click.option('--skip-clear-cache', is_flag=True, help="don't clear the worker cache before preparing the bucket")
@@ -28,13 +28,13 @@ custom.add_command(common_cli.LoadGeneratorRunCommand('custom'))
 @click.option('--skip-all', is_flag=True, help="skip all operations and only prepare the bucket")
 @click.option('--upload-concurrency', type=int, help='number of threads to start for uploading objects to the bucket')
 def prepare_custom_bucket(**kwargs):
-    """creates and uploads objects to a bucket in preparation for load generation"""
+    """Creates and uploads objects to a bucket in preparation for load generation"""
     bucket_name = load_generator_custom.prepare_custom_bucket(**kwargs)
     print('OK')
     print('bucket_name={}'.format(bucket_name))
 
 
-@custom.command()
+@custom.command(short_help="Generates load on test instances, each load thread will choose an instance in random")
 @click.option('--method', default='https', show_default=True, required=False)
 @click.option('--num-test-instances', type=int, help='number of random instances to generate load for', default=5, show_default=True)
 @click.option('--test-instances-zones', help='comma-separated list of test instance zones to test with, if not provided - tests all zones')
@@ -67,7 +67,7 @@ def run_multi(**kwargs):
 @click.option('--objects', type=int, default=10, show_default=True, help='number of objects to prepare the bucket for')
 @click.option('--duration_seconds', type=int, default=10, show_default=True, help='duration in seconds of the test to prepare the bucket for')
 @click.option('--concurrency', type=int, default=6, show_default=True, help='concurrency to prepare the bucket for')
-@click.option('--obj_size_kb', type=int, default=1, show_default=True, help='object size in kb to preapre the bucket for')
+@click.option('--obj_size_kb', type=int, default=1, show_default=True, help='object size in kb to prepare the bucket for')
 @click.option('--upload-concurrency', type=int, help='number of threads to start for uploading objects to the bucket')
 @click.option('--test-instances-worker-ids', help='comma-separated list of test instance worker ids to test with')
 def prepare_default_bucket_multi(**kwargs):

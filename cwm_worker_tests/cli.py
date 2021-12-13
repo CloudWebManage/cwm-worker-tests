@@ -11,17 +11,18 @@ from cwm_worker_tests import common_cli
 import cwm_worker_tests.distributed_tests.distributed_load_tests
 import cwm_worker_tests.dns
 import cwm_worker_tests.distributed_tests.create_servers
+import cwm_worker_tests.upload_download_test
 
 
-@click.group(context_settings={'max_content_width': 200})
+@click.group()
 def main():
     """Run integration tests and related tools for cwm-worker components"""
     pass
 
 
-@main.group()
+@main.group(short_help="Multi-threaded load generators")
 def load_generator():
-    """multi-threaded load generators"""
+    """Multi-threaded load generators"""
     pass
 
 
@@ -29,7 +30,7 @@ load_generator.add_command(cwm_worker_tests.cli_subcommands.load_generator_custo
 load_generator.add_command(cwm_worker_tests.cli_subcommands.load_generator_warp.warp)
 
 
-@main.command()
+@main.command(short_help="Load test")
 @click.option('--objects', default=10, type=int)
 @click.option('--duration-seconds', default=10, type=int)
 @click.option('--hostname', type=str)
@@ -49,7 +50,7 @@ def load_test(**kwargs):
     cwm_worker_tests.load_test.main(**kwargs)
 
 
-@main.command()
+@main.command(short_help="Run a distributed load test using Kamatera servers")
 @click.option('--objects', default=10, type=int)
 @click.option('--duration-seconds', default=10, type=int)
 @click.option('--concurrency', default=6, type=int)
@@ -83,25 +84,34 @@ def distributed_load_test_aggregate_test_results(**kwargs):
     cwm_worker_tests.distributed_tests.distributed_load_tests.aggregate_test_results(**kwargs)
 
 
-@main.command()
+@main.command(short_help="Run multiple distributed load tests")
 @click.argument('TESTS_CONFIG')
 def distributed_load_test_multi(tests_config):
     """Run multiple distributed load tests
 
-    TESTS_CONFIG can be either the json itslef or a filename
+    TESTS_CONFIG can either be the JSON itself or a filename
 
     TESTS_CONFIG keys:
 
-    defaults - default values for all tests (correspond to distributed load test arguments)
-    multi_values - keys to fill with multiple values from lists
-    tests - list of objects, each object is a test which will run with args to override in the defaults for this test
-    custom_load_options - custom load options to apply to all tests
-    dry_run - boolean
-    stop_on_error - boolean (default=true)
-    add_clear_workers - none - will determine based on test values, skip - will skip for all tests, force = will force for all tests
-    prepare_load_generator - none - will determine based on test values, skip - will skip for all tests, force = will force for all tests
+    \b
+    defaults                default values for all tests (correspond to
+                            distributed load test arguments)
+    multi_values            keys to fill with multiple values from lists
+    tests                   list of objects, each object is a test which will
+                            run with args to override in the defaults for this test
+    custom_load_options     custom load options to apply to all tests
+    dry_run                 boolean
+    stop_on_error           boolean (default = true)
+    add_clear_workers       none: will determine based on test values
+                            skip: will skip for all tests
+                            force: will force for all tests
+    prepare_load_generator  none: will determine based on test values
+                            skip: will skip for all tests
+                            force: will force for all tests
 
     example tests_config with all defaults:
+
+    \b
     {
         "defaults": {
             "add_clear_workers": null,
@@ -146,3 +156,20 @@ def check_domain_dns():
 @main.command()
 def distributed_load_test_delete_kept_servers():
     cwm_worker_tests.distributed_tests.create_servers.delete_kept_servers()
+
+
+@main.command(short_help='Run upload and/or download test with generated test files')
+@click.option('--endpoint', required=True, type=str, help='Endpoint of MinIO instance without protocol and path')
+@click.option('--access-key', required=True, type=str, help='Access key of MinIO instance')
+@click.option('--secret-key', required=True, type=str, help='Secret key of MinIO instance')
+@click.option('--bucket', required=True, type=str, help='Bucket name to upload to and download from')
+@click.option('--num-files', required=True, type=int, default=10, help='Number of files to upload/download')
+@click.option('--file-size', required=True, default=1024, type=int, help='Each file size in bytes')
+@click.option('--only-upload', is_flag=True, default=False, help='Only run the upload')
+@click.option('--only-download', is_flag=True, default=False, help='Only run the download')
+@click.option('--download-iterations', default=1, type=int, help='Number of iterations for downloading')
+@click.option('--download-threads', default=1, type=int, help='Number of threads for downloading')
+@click.option('--output-dir', type=str, help='Path to output CSV files')
+def upload_download_test(**kwargs):
+    """Run upload and/or download test with generated test files"""
+    cwm_worker_tests.upload_download_test.main(**kwargs)
