@@ -57,10 +57,8 @@ def upload(endpoint, access_key, secret_key, bucket, num_files, file_size, outpu
             try:
                 client.fput_object(bucket, filename, filepath)
             except S3Error as e:
-                print(f'\rException: {e}')
                 error = str(e)
             except Exception as e:
-                print(f'\rException: {e}')
                 error = str(e)
             file_upload_end_time = datetime.datetime.now()
             file_upload_elapsed_time_seconds = (file_upload_end_time - file_upload_start_time).total_seconds()
@@ -150,10 +148,8 @@ class DownloadIteration(Thread):
                         object_size_bytes = os.path.getsize(object_filepath)
                         os.remove(object_filepath)
                     except S3Error as e:
-                        print(f'{context} | Exception: {e}')
                         error = str(e)
                     except Exception as e:
-                        print(f'{context} | Exception: {e}')
                         error = str(e)
                     download_end_time = datetime.datetime.now()
                     download_elapsed_time = (download_end_time - download_start_time).total_seconds()
