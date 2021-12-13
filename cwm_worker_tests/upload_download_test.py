@@ -62,7 +62,7 @@ def upload(endpoint, access_key, secret_key, bucket, num_files, file_size, outpu
                 error = str(e)
             file_upload_end_time = datetime.datetime.now()
             file_upload_elapsed_time_seconds = (file_upload_end_time - file_upload_start_time).total_seconds()
-            print(f'\rUploaded: {i+1} files [{file_upload_elapsed_time_seconds} seconds]', end='', flush=True)
+            print(f'\rUploaded: {i+1} files', end='', flush=True)
             uploads.append({
                 'file_index': i+1,
                 'filename': filename,
