@@ -4,7 +4,7 @@ import datetime
 from threading import Thread
 from minio import Minio
 from minio.error import S3Error
-
+import csv
 
 def get_now_string():
     return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
@@ -47,16 +47,52 @@ def upload(endpoint, access_key, secret_key, bucket, num_files, file_size, outpu
         # Create test file, remove at the end
         filepath = create_test_file(file_size)
 
+        uploads = []
+
         print(f'Uploading files...')
         for i in range(num_files):
+            file_upload_start_time = datetime.datetime.now()
             filename = get_upload_filename()
-            client.fput_object(bucket, filename, filepath)
-            print(f'\rUploaded: {i+1} files', end='', flush=True)
+            error = None
+            try:
+                client.fput_object(bucket, filename, filepath)
+            except S3Error as e:
+                print(f'\rException: {e}')
+                error = str(e)
+            except Exception as e:
+                print(f'\rException: {e}')
+                error = str(e)
+            file_upload_end_time = datetime.datetime.now()
+            file_upload_elapsed_time_seconds = (file_upload_end_time - file_upload_start_time).total_seconds()
+            print(f'\rUploaded: {i+1} files [{file_upload_elapsed_time_seconds} seconds]', end='', flush=True)
+            uploads.append({
+                'file_index': i+1,
+                'filename': filename,
+                'file_upload_elapsed_time_seconds': file_upload_elapsed_time_seconds,
+                'error': error
+            })
 
         end_time = datetime.datetime.now()
         elapsed_seconds = (end_time - start_time).total_seconds()
         print(f'\nFiles uploaded! [{elapsed_seconds} seconds]')
 
+        # Generate CSV report
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+        output_filename = f'upload-report-{timestamp}.csv'
+        output_filepath = output_dir + '/' + output_filename
+
+        print(f'Generating CSV report... [{output_filepath}]')
+        with open(output_filepath, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(['file_index', 'filename', 'file_upload_elapsed_time_seconds', 'error'])
+            for upload in uploads:
+                file_index = upload['file_index']
+                filename = upload['filename']
+                file_upload_elapsed_time_seconds = upload['file_upload_elapsed_time_seconds']
+                error = upload['error']
+                csv_writer.writerow([file_index, filename, file_upload_elapsed_time_seconds, error])
+        output_filesize = os.path.getsize(output_filepath)
+        print(f'CSV report generated! [{output_filepath}] ({output_filesize} bytes)')
     except S3Error as e:
         print(f'\nMinIO exception: {e}')
     except Exception as e:
@@ -102,21 +138,41 @@ class DownloadIteration(Thread):
                 print(f'{context} | Iteration # {iteration_no} | Started')
                 objects = client.list_objects(self.bucket, recursive=True)
                 num_downloaded_files = 0
+                downloads = []
                 for obj in objects:
+                    download_start_time = datetime.datetime.now()
                     object_name = obj.object_name
-                    object_filepath = f'/tmp/{object_name}.{self.threadid}' 
-                    client.fget_object(self.bucket, object_name, object_filepath)
-                    num_downloaded_files += 1
-                    os.remove(object_filepath)
+                    object_filepath = f'/tmp/{object_name}.{self.threadid}'
+                    error = None
+                    try:
+                        client.fget_object(self.bucket, object_name, object_filepath)
+                        num_downloaded_files += 1
+                        object_size_bytes = os.path.getsize(object_filepath)
+                        os.remove(object_filepath)
+                    except S3Error as e:
+                        print(f'{context} | Exception: {e}')
+                        error = str(e)
+                    except Exception as e:
+                        print(f'{context} | Exception: {e}')
+                        error = str(e)
+                    download_end_time = datetime.datetime.now()
+                    download_elapsed_time = (download_end_time - download_start_time).total_seconds()
+                    downloads.append({
+                        'object_name': object_name,
+                        'object_size_bytes': object_size_bytes,
+                        'object_elapsed_time_seconds': download_elapsed_time,
+                        'error': error
+                    })
                 # print(f'{context} | Downloaded: {num_downloaded_files} files', end='', flush=True)
                 iteration_end_time = datetime.datetime.now()
                 iteration_elapsed_seconds = (iteration_end_time - iteration_start_time).total_seconds()
                 print(f'{context} | Iteration # {iteration_no} | Finished [{iteration_elapsed_seconds} seconds] [{num_downloaded_files} files]')
 
                 iterations.append({
-                    'iteration': iteration_no,
-                    'elapsed_seconds': iteration_elapsed_seconds,
-                    'num_downloaded_files': num_downloaded_files
+                    'iteration_no': iteration_no,
+                    'iteration_elapsed_seconds': iteration_elapsed_seconds,
+                    'num_downloaded_files': num_downloaded_files,
+                    'downloads': downloads
                 })
 
             thread_end_time = datetime.datetime.now()
@@ -149,9 +205,30 @@ def download(endpoint, access_key, secret_key, bucket, download_iterations, down
         for thread in threads:
             thread.join()
 
-        for thread in threads:
-            print(thread.get_stats())
+        # Generate CSV report
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+        output_filename = f'download-report-{timestamp}.csv'
+        output_filepath = output_dir + '/' + output_filename
 
+        print(f'Generating CSV report... [{output_filepath}]')
+        with open(output_filepath, 'w', newline='') as csvfile:
+            csv_writer = csv.writer(csvfile)
+            csv_writer.writerow(['threadid', 'iteration_no', 'object_name', 'object_size_bytes', 'object_elapsed_time_seconds', 'error'])
+            for thread in threads:
+                stats = thread.get_stats()
+                threadid = stats['threadid']
+                iterations = stats['iterations']
+                for iteration in iterations:
+                    iteration_no = iteration['iteration_no']
+                    downloads = iteration['downloads']
+                    for download in downloads:
+                        object_name = download['object_name']
+                        object_size_bytes = download['object_size_bytes']
+                        object_elapsed_time_seconds = download['object_elapsed_time_seconds']
+                        error = download['error']
+                        csv_writer.writerow([threadid, iteration_no, object_name, object_size_bytes, object_elapsed_time_seconds, error])
+        output_filesize = os.path.getsize(output_filepath)
+        print(f'CSV report generated! [{output_filepath}] ({output_filesize} bytes)')
     except Exception as e:
         print(f'Exception: {e}')
 
@@ -162,6 +239,10 @@ def main(endpoint:str, access_key=str, secret_key=str, bucket=str, num_files=int
     for k, v in locals().items():
         print(f'  {k: >{20}}  =  {v}')
     print()
+
+    if not os.path.isdir(output_dir):
+        print(f'ERROR: Invalid output directory! [{output_dir}]')
+        exit(1)
 
     if not only_download:
         upload(endpoint=endpoint, access_key=access_key, secret_key=secret_key, bucket=bucket, num_files=num_files, file_size=file_size, output_dir=output_dir)
