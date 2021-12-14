@@ -25,59 +25,45 @@ def get_filename(file_size, index):
 def upload(endpoint, access_key, secret_key, bucket, num_files, file_size, output_dir):
     print(f'📤 Upload test')
 
-    test_filepath = None
-    try:
-        upload_start_time = datetime.datetime.now()
+    upload_start_time = datetime.datetime.now()
 
-        client = Minio(endpoint, access_key=access_key, secret_key=secret_key)
+    client = Minio(endpoint, access_key=access_key, secret_key=secret_key)
 
-        bucket_exists = client.bucket_exists(bucket)
-        if not bucket_exists:
-            print(f'Bucket does not exist! [{bucket}]')
-            client.make_bucket(bucket)
-            print(f'Bucket created! [{bucket}]')
-        else:
-            print(f'Bucket exists! [{bucket}]')
+    bucket_exists = client.bucket_exists(bucket)
+    if not bucket_exists:
+        print(f'Bucket does not exist! [{bucket}]')
+        client.make_bucket(bucket)
+        print(f'Bucket created! [{bucket}]')
+    else:
+        print(f'Bucket exists! [{bucket}]')
 
-        test_filepath = create_test_file(file_size)
+    test_filepath = create_test_file(file_size)
 
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
-        output_filename = f'upload-report-{timestamp}.csv'
-        output_filepath = output_dir + '/' + output_filename
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+    output_filename = f'upload-report-{timestamp}.csv'
+    output_filepath = output_dir + '/' + output_filename
 
-        with open(output_filepath, 'w', buffering=1) as csvfile:
-            csvfile.write(f'file_index,filename,file_upload_elapsed_time_seconds\n')
-            print(f'Uploading files... [CSV report: {output_filepath}]')
-            for i in range(num_files):
-                index = i+1
-                file_upload_start_time = datetime.datetime.now()
-                filename = get_filename(file_size=file_size, index=index)
-                try:
-                    client.fput_object(bucket, filename, test_filepath)
-                except S3Error as e:
-                    print(f'Exception: {e}')
-                    exit(1)
-                except Exception as e:
-                    print(f'Exception: {e}')
-                    exit(1)
-                file_upload_end_time = datetime.datetime.now()
-                file_upload_elapsed_time_seconds = (file_upload_end_time - file_upload_start_time).total_seconds()
-                print(f'\rUploaded: {index} files', end='', flush=True)
-                csvfile.write(f'{index},{filename},{file_upload_elapsed_time_seconds}\n')
+    with open(output_filepath, 'w', buffering=1) as csvfile:
+        csvfile.write(f'file_index,filename,file_upload_elapsed_time_seconds\n')
+        print(f'Uploading files... [CSV report: {output_filepath}]')
+        for i in range(num_files):
+            index = i+1
+            file_upload_start_time = datetime.datetime.now()
+            filename = get_filename(file_size=file_size, index=index)
+            client.fput_object(bucket, filename, test_filepath)
+            file_upload_end_time = datetime.datetime.now()
+            file_upload_elapsed_time_seconds = (file_upload_end_time - file_upload_start_time).total_seconds()
+            print(f'\rUploaded: {index} files', end='', flush=True)
+            csvfile.write(f'{index},{filename},{file_upload_elapsed_time_seconds}\n')
 
-        output_filesize = os.path.getsize(output_filepath)
-        print(f'\nCSV report generated! [{output_filepath}] ({output_filesize} bytes)')
+    output_filesize = os.path.getsize(output_filepath)
+    print(f'\nCSV report generated! [{output_filepath}] ({output_filesize} bytes)')
 
-        upload_end_time = datetime.datetime.now()
-        upload_elapsed_time_seconds = (upload_end_time - upload_start_time).total_seconds()
-        print(f'Upload finished! [{upload_elapsed_time_seconds} seconds]')
-    except S3Error as e:
-        print(f'\nMinIO exception: {e}')
-    except Exception as e:
-        print(f'\nException: {e}')
-    finally:
-        if test_filepath:
-            os.remove(test_filepath)
+    upload_end_time = datetime.datetime.now()
+    upload_elapsed_time_seconds = (upload_end_time - upload_start_time).total_seconds()
+    print(f'Upload finished! [{upload_elapsed_time_seconds} seconds]')
+    if test_filepath:
+        os.remove(test_filepath)
 
 
 class DownloadIteration(Thread):
@@ -123,8 +109,6 @@ class DownloadIteration(Thread):
                         client.fget_object(self.bucket, object_name, object_filepath)
                         object_size_bytes = os.path.getsize(object_filepath)
                         os.remove(object_filepath)
-                    except S3Error as e:
-                        error = str(e)
                     except Exception as e:
                         error = str(e)
                     download_end_time = datetime.datetime.now()
@@ -182,16 +166,15 @@ def download(endpoint, access_key, secret_key, bucket, num_files, file_size, dow
         print(f'Exception: {e}')
 
 
-def main(endpoint:str, access_key=str, secret_key=str, bucket=str, num_files=int, file_size=int,
-         download_iterations=int, download_threads=int, output_dir=str, only_upload=bool, only_download=bool):
+def main(endpoint:str, access_key:str, secret_key:str, bucket:str, num_files:int, file_size:int,
+         download_iterations:int, download_threads:int, output_dir:str, only_upload:bool, only_download:bool):
     print('Arguments:')
     for k, v in locals().items():
         print(f'  {k: >{20}}  =  {v}')
     print()
 
     if not os.path.isdir(output_dir):
-        print(f'ERROR: Invalid output directory! [{output_dir}]')
-        exit(1)
+        raise Exception(f'ERROR: Invalid output directory! [{output_dir}]')
 
     if not only_download:
         upload(endpoint=endpoint, access_key=access_key, secret_key=secret_key, bucket=bucket,
