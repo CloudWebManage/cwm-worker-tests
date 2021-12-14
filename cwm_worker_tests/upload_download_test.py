@@ -3,7 +3,7 @@ import subprocess
 import datetime
 from threading import Thread, Lock
 from minio import Minio
-from minio.error import S3Error
+
 
 def get_now_string():
     return datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.%f')
@@ -28,7 +28,6 @@ def upload(endpoint, access_key, secret_key, bucket, num_files, file_size, outpu
     upload_start_time = datetime.datetime.now()
 
     client = Minio(endpoint, access_key=access_key, secret_key=secret_key)
-
     bucket_exists = client.bucket_exists(bucket)
     if not bucket_exists:
         print(f'Bucket does not exist! [{bucket}]')
@@ -82,88 +81,79 @@ class DownloadIteration(Thread):
         self.csvfile_lock = csvfile_lock
 
     def run(self):
-        try:
-            thread_start_time = datetime.datetime.now()
- 
-            context = f'Thread # {self.threadid}'
-            print(f'{context} | Started')
+        thread_start_time = datetime.datetime.now()
 
-            client = Minio(endpoint=self.endpoint, access_key=self.access_key, secret_key=self.secret_key)
+        context = f'Thread # {self.threadid}'
+        print(f'{context} | Started')
 
-            bucket_exists = client.bucket_exists(self.bucket)
-            if not bucket_exists:
-                print(f'Bucket does not exist! [{self.bucket}]')
-                return
+        client = Minio(endpoint=self.endpoint, access_key=self.access_key, secret_key=self.secret_key)
+        bucket_exists = client.bucket_exists(self.bucket)
+        if not bucket_exists:
+            print(f'Bucket does not exist! [{self.bucket}]')
+            return
 
-            for iteration in range(self.download_iterations):
-                iteration_no = iteration + 1
-                iteration_start_time = datetime.datetime.now()
-                print(f'{context} | Iteration # {iteration_no} | Started')
-                for i in range(self.num_files):
-                    download_start_time = datetime.datetime.now()
-                    error = None
-                    try:
-                        index = i+1
-                        object_name = get_filename(self.file_size, index)
-                        object_filepath = f'/tmp/{object_name}.{self.threadid}'
-                        client.fget_object(self.bucket, object_name, object_filepath)
-                        object_size_bytes = os.path.getsize(object_filepath)
-                        os.remove(object_filepath)
-                    except Exception as e:
-                        error = str(e)
-                    download_end_time = datetime.datetime.now()
-                    download_elapsed_time_seconds = (download_end_time - download_start_time).total_seconds()
-                    with self.csvfile_lock:
-                        self.csvfile.write(f'{self.threadid},{iteration_no},{object_name},{object_size_bytes},{download_elapsed_time_seconds},{error}\n')
-                iteration_end_time = datetime.datetime.now()
-                iteration_elapsed_seconds = (iteration_end_time - iteration_start_time).total_seconds()
-                print(f'{context} | Iteration # {iteration_no} | Finished [{iteration_elapsed_seconds} seconds]')
+        for iteration in range(self.download_iterations):
+            iteration_no = iteration + 1
+            iteration_start_time = datetime.datetime.now()
+            print(f'{context} | Iteration # {iteration_no} | Started')
+            for i in range(self.num_files):
+                download_start_time = datetime.datetime.now()
+                error = None
+                try:
+                    index = i+1
+                    object_name = get_filename(self.file_size, index)
+                    object_filepath = f'/tmp/{object_name}.{self.threadid}'
+                    client.fget_object(self.bucket, object_name, object_filepath)
+                    object_size_bytes = os.path.getsize(object_filepath)
+                    os.remove(object_filepath)
+                except Exception as e:
+                    error = str(e)
+                download_end_time = datetime.datetime.now()
+                download_elapsed_time_seconds = (download_end_time - download_start_time).total_seconds()
+                with self.csvfile_lock:
+                    self.csvfile.write(f'{self.threadid},{iteration_no},{object_name},{object_size_bytes},{download_elapsed_time_seconds},{error}\n')
+            iteration_end_time = datetime.datetime.now()
+            iteration_elapsed_seconds = (iteration_end_time - iteration_start_time).total_seconds()
+            print(f'{context} | Iteration # {iteration_no} | Finished [{iteration_elapsed_seconds} seconds]')
 
-            thread_end_time = datetime.datetime.now()
-            thread_elapsed_seconds = (thread_end_time - thread_start_time).total_seconds()
-            print(f'{context} | Finished [{thread_elapsed_seconds} seconds]')
-        except S3Error as e:
-            print(f'MinIO Exception: {e}')
-        except Exception as e:
-            print(f'Exception: {e}')
+        thread_end_time = datetime.datetime.now()
+        thread_elapsed_seconds = (thread_end_time - thread_start_time).total_seconds()
+        print(f'{context} | Finished [{thread_elapsed_seconds} seconds]')
 
 
 def download(endpoint, access_key, secret_key, bucket, num_files, file_size, download_iterations, download_threads, output_dir):
     print(f'📥 Download test')
 
-    try:
-        download_start_time = datetime.datetime.now()
+    download_start_time = datetime.datetime.now()
 
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
-        output_filename = f'download-report-{timestamp}.csv'
-        output_filepath = output_dir + '/' + output_filename
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S.000%fZ')
+    output_filename = f'download-report-{timestamp}.csv'
+    output_filepath = output_dir + '/' + output_filename
 
-        with open(output_filepath, 'w', buffering=1) as csvfile:
-            csvfile.write(f'threadid,iteration_no,object_name,object_size_bytes,object_elapsed_time_seconds,error\n')
-            csvfile_lock = Lock()
+    with open(output_filepath, 'w', buffering=1) as csvfile:
+        csvfile.write(f'threadid,iteration_no,object_name,object_size_bytes,object_elapsed_time_seconds,error\n')
+        csvfile_lock = Lock()
 
-            print(f'Downloading files... [CSV report: {output_filepath}]')
-            print(f'Spawning threads... [download_threads: {download_threads}]')
-            threads = []
-            for i in range(download_threads):
-                threadid = i+1
-                thread = DownloadIteration(threadid=threadid, endpoint=endpoint, access_key=access_key, secret_key=secret_key, bucket=bucket,
-                                           num_files=num_files, file_size=file_size, download_iterations=download_iterations,
-                                           csvfile=csvfile, csvfile_lock=csvfile_lock)
-                threads.append(thread)
-                thread.start()
+        print(f'Downloading files... [CSV report: {output_filepath}]')
+        print(f'Spawning threads... [download_threads: {download_threads}]')
+        threads = []
+        for i in range(download_threads):
+            threadid = i+1
+            thread = DownloadIteration(threadid=threadid, endpoint=endpoint, access_key=access_key, secret_key=secret_key, bucket=bucket,
+                                        num_files=num_files, file_size=file_size, download_iterations=download_iterations,
+                                        csvfile=csvfile, csvfile_lock=csvfile_lock)
+            threads.append(thread)
+            thread.start()
 
-            for thread in threads:
-                thread.join()
+        for thread in threads:
+            thread.join()
 
-        output_filesize = os.path.getsize(output_filepath)
-        print(f'CSV report generated! [{output_filepath}] ({output_filesize} bytes)')
+    output_filesize = os.path.getsize(output_filepath)
+    print(f'CSV report generated! [{output_filepath}] ({output_filesize} bytes)')
 
-        download_end_time = datetime.datetime.now()
-        download_elapsed_time_seconds = (download_end_time - download_start_time).total_seconds()
-        print(f'Download finished! [{download_elapsed_time_seconds} seconds]')
-    except Exception as e:
-        print(f'Exception: {e}')
+    download_end_time = datetime.datetime.now()
+    download_elapsed_time_seconds = (download_end_time - download_start_time).total_seconds()
+    print(f'Download finished! [{download_elapsed_time_seconds} seconds]')
 
 
 def main(endpoint:str, access_key:str, secret_key:str, bucket:str, num_files:int, file_size:int,
