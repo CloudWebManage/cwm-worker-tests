@@ -16,6 +16,7 @@ from cwm_worker_cluster.worker import api as worker_api
 from cwm_worker_cluster.cluster import api as cluster_api
 from cwm_worker_tests.load_generator_custom import prepare_default_bucket
 from cwm_worker_tests.distributed_tests import create_servers
+from cwm_worker_tests.retry import retry_exception_decorator
 
 
 DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR = '.distributed-load-test-output'
@@ -33,6 +34,7 @@ def get_worker_id_from_num(domain_num):
     raise Exception("Using domain_num to determinet worker_id is not supported!")
 
 
+@retry_exception_decorator()
 def prepare_server_for_load_test(tempdir, server_ip):
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
@@ -68,6 +70,7 @@ def start_server_load_tests(tempdir, server_name, server_ip, load_test_domain_nu
     assert ret == 0, out
 
 
+@retry_exception_decorator()
 def wait_for_server_load_tests_to_complete(tempdir, server_ip, protocol):
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
     ret, out = subprocess.getstatusoutput('{ssh} "docker ps | grep load_test_{protocol}"'.format(ssh=ssh, protocol=protocol))
@@ -79,12 +82,14 @@ def wait_for_server_load_tests_to_complete(tempdir, server_ip, protocol):
         return False
 
 
+@retry_exception_decorator()
 def show_server_load_tests_log(tempdir, server_ip, protocol):
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(server_ip, tempdir)
     ret, out = subprocess.getstatusoutput('{ssh} "docker logs load_test_{protocol}"'.format(ssh=ssh, protocol=protocol))
     print(out)
 
 
+@retry_exception_decorator()
 def copy_load_test_data_from_remote_server(tempdir, server_ip, load_test_domain_num):
     scp = 'scp -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(tempdir)
     ret, out = subprocess.getstatusoutput('''
