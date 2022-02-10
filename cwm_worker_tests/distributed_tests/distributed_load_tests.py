@@ -222,28 +222,7 @@ def prepare_custom_load_generator(servers, prepare_domain_names, root_progress, 
             for worker_id, hostname in prepare_domain_names.items():
                 print("worker_id={}".format(worker_id))
                 with progress.set_start_end('prepare_custom_bucket_start_{}'.format(worker_id), 'prepare_custom_bucket_end_{}'.format(worker_id)):
-                    ok, i = False, 1
-                    while not ok:
-                        try:
-                            if not skip_prepare_load_generator:
-                                prepare_default_bucket('https', worker_id, hostname, objects, obj_size_kb, with_delete=True)
-                            ok = True
-                        except:
-                            traceback.print_exc()
-                            if i <= 5:
-                                print("Failed to prepare default bucket for worker {}, will retry ({}/5)".format(worker_id, i))
-                                if i > 3:
-                                    print("recreating worker..")
-                                    common.assert_site(
-                                        worker_id, hostname,
-                                        skip_clear_cache=True, skip_clear_volume=True, skip_all=False,
-                                        protocols=['https']
-                                    )
-                                else:
-                                    time.sleep(5)
-                                i += 1
-                            else:
-                                raise
+                    prepare_default_bucket('https', worker_id, hostname, objects, obj_size_kb, with_delete=True, with_retries=True)
             for server in servers.values():
                 server['custom_load_options']['use_default_bucket'] = True
                 server['custom_load_options']['skip_prepare_bucket'] = True

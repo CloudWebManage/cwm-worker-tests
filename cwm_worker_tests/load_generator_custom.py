@@ -15,8 +15,10 @@ import requests
 from botocore.client import Config
 from botocore.exceptions import ClientError
 
+from cwm_worker_cluster import common
 from cwm_worker_cluster.worker import api as worker_api
 from cwm_worker_cluster.test_instance import api as test_instance_api
+from cwm_worker_tests.retry import retry_exception_dynamic
 
 
 urllib3.disable_warnings()
@@ -301,7 +303,17 @@ def get_default_bucket_name(obj_size_kb, objects):
     return '{}-{}kb-{}'.format(DEFAULT_BUCKET_NAME, obj_size_kb, objects)
 
 
-def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False, upload_concurrency=5):
+def _prepare_default_bucket(
+    method, worker_id, hostname, objects, obj_size_kb, with_delete=False, upload_concurrency=5,
+    with_recreate=False
+):
+    if with_recreate:
+        time.sleep(10)
+        common.assert_site(
+            worker_id, hostname,
+            skip_clear_cache=True, skip_clear_volume=True, skip_all=False,
+            protocols=['https']
+        )
     bucket_name = get_default_bucket_name(obj_size_kb, objects)
     bucket = get_s3_resource(method, hostname, with_retries=True).Bucket(bucket_name)
     bucket.load()
@@ -342,6 +354,28 @@ def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, wi
         prepare_custom_bucket(method, worker_id, hostname, obj_size_kb=obj_size_kb, bucket_name=bucket_name,
                               skip_create_bucket=True, only_upload_filenums=missing_filenums, delete_keys=delete_threadkeys,
                               upload_concurrency=upload_concurrency)
+
+
+def prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=False, upload_concurrency=5, with_retries=False):
+    if with_retries:
+        retry_exception_dynamic(
+            _prepare_default_bucket,
+            [
+                {},
+                {'sleep_seconds': 5},
+                {'sleep_seconds': 5},
+                {'sleep_seconds': 5},
+                {'sleep_seconds': 1, 'extra_kwargs': {'with_recreate': True}},
+                {'sleep_seconds': 5},
+                {'sleep_seconds': 10},
+                {'sleep_seconds': 20},
+                {'sleep_seconds': 60},
+            ],
+            callback_args=[method, worker_id, hostname, objects, obj_size_kb],
+            callback_kwargs=dict(with_delete=with_delete, upload_concurrency=upload_concurrency)
+        )
+    else:
+        _prepare_default_bucket(method, worker_id, hostname, objects, obj_size_kb, with_delete=with_delete, upload_concurrency=upload_concurrency)
 
 
 def run(method, worker_id, hostname, objects, duration_seconds, concurrency, obj_size_kb,
