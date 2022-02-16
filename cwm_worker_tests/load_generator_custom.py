@@ -66,9 +66,9 @@ class RunCustomThread(Thread):
             s3 = None
             while not s3:
                 try:
-                    s3 = get_s3_resource(self.method, domain_name, with_retries=False)
+                    s3 = get_s3_resource(self.method, domain_name, with_retries=True)
                 except:
-                    if (datetime.datetime.now() - start_time).total_seconds() > 60:
+                    if (datetime.datetime.now() - start_time).total_seconds() > 120:
                         print("Timeout trying to get s3 resource")
                         raise
             bucket = s3.Bucket(self.domain_name_buckets[domain_name])
@@ -205,7 +205,7 @@ class RunCustomThread(Thread):
         self.stats['elapsed_seconds'] = (datetime.datetime.now() - start_time).total_seconds()
 
 
-def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=None, connect_timeout=15, read_timeout=60):
+def get_s3_resource(method, domain_name, with_retries=False, retry_max_attempts=None, connect_timeout=120, read_timeout=240):
     if retry_max_attempts is None:
         retry_max_attempts = 10 if with_retries else 0
     else:
