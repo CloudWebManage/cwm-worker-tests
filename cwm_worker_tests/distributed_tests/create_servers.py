@@ -8,6 +8,7 @@ from contextlib import contextmanager
 
 
 from cwm_worker_cluster import config
+from cwm_worker_tests.retry import retry_exception_decorator
 
 
 def generate_new_ssh_key(tempdir):
@@ -50,6 +51,7 @@ def get_server_ip(tempdir, name):
     return json.loads(out)[0]['networks'][0]['ips'][0]
 
 
+@retry_exception_decorator()
 def install_docker(tempdir, name, ip):
     print("Installing docker on server {}".format(name))
     ret, out = subprocess.getstatusoutput('''
@@ -66,6 +68,7 @@ def install_docker(tempdir, name, ip):
     return ret == 0, out
 
 
+@retry_exception_decorator()
 def build_test_docker_image(tempdir, name, ip):
     print("Building tests docker image on server {}".format(name))
     ssh = 'ssh root@{} -i {}/id_rsa -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'.format(ip, tempdir)
