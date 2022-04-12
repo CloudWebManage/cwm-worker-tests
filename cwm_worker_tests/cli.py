@@ -168,8 +168,8 @@ def distributed_load_test_delete_kept_servers():
 @click.option('--download-iterations', required=True, type=int, help='Number of iterations for downloading')
 @click.option('--download-threads', required=True, type=int, help='Number of threads for downloading')
 @click.option('--output-dir', required=True, type=str, help='Path to output CSV files')
-@click.option('--only-upload', required=True, is_flag=True, type=bool, help='Only run the upload')
-@click.option('--only-download', required=True, is_flag=True, type=bool, help='Only run the download')
+@click.option('--only-upload', is_flag=True, type=bool, help='Only run the upload')
+@click.option('--only-download', is_flag=True, type=bool, help='Only run the download')
 def upload_download_test(**kwargs):
     """Run upload and/or download test with generated test files"""
     cwm_worker_tests.upload_download_test.main(**kwargs)
