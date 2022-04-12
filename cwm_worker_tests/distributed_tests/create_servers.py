@@ -45,10 +45,11 @@ def terminate_create_server_process(create_server_process):
     create_server_process.terminate()
 
 
-def get_server_ip(tempdir, name):
+def get_server_ip_power_on(tempdir, name):
     ret, out = subprocess.getstatusoutput('cloudcli --config {}/cloudcli.yaml server info --name {} --format json'.format(tempdir, name))
     assert ret == 0, out
-    return json.loads(out)[0]['networks'][0]['ips'][0]
+    server = json.loads(out)[0]
+    return server['networks'][0]['ips'][0], server['power'] == 'on'
 
 
 @retry_exception_decorator()
@@ -106,8 +107,28 @@ def delete_server(tempdir, name):
         return True
 
 
+def _poweroff_server(tempdir, name):
+    ret, out = subprocess.getstatusoutput(
+        """cloudcli --config {tempdir}/cloudcli.yaml server poweroff --name {name}""".format(tempdir=tempdir, name=name))
+    if ret != 0:
+        print(out)
+        return False
+    else:
+        return True
+
+
+def _poweron_server(tempdir, name):
+    ret, out = subprocess.getstatusoutput(
+        """cloudcli --config {tempdir}/cloudcli.yaml server poweron --name {name} --wait""".format(tempdir=tempdir, name=name))
+    if ret != 0:
+        print(out)
+        return False
+    else:
+        return True
+
+
 @contextmanager
-def create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress):
+def create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress, server_name_prefix=None, poweroff_servers=True):
     with root_progress.start_sub(__spec__.name, 'create_servers') as progress:
         KEEP_SERVERS_JSON_PATH = os.environ.get('KEEP_SERVERS_JSON_PATH')
         DELETE_KEPT_SERVERS = os.environ.get('DELETE_KEPT_SERVERS') == 'true'
@@ -153,7 +174,10 @@ def create_servers(servers, post_delete_cleanup, create_servers_stats, root_prog
                         if server.get('created'):
                             continue
                         datacenter = server['datacenter']
-                        server_name = server['name'] = str(uuid.uuid4())
+                        server_name = server['name'] = '{}-{}'.format(
+                            server_name_prefix if server_name_prefix else 'objstore-load-test',
+                            str(uuid.uuid4())
+                        )
                         password = server['password'] = str("Aa1!%s" % os.urandom(12).hex())
                         server['create_server_process'] = start_create_server_process(tempdir, server_name, password, datacenter)
                     try:
@@ -173,9 +197,10 @@ def create_servers(servers, post_delete_cleanup, create_servers_stats, root_prog
                             if server.get('create_server_process'):
                                 terminate_create_server_process(server['create_server_process'])
                 for server in servers.values():
-                    if not server.get('ip'):
-                        server['ip'] = get_server_ip(tempdir, server['name'])
-                    print("server {} ip {}".format(server['name'], server['ip']))
+                    server['ip'], is_power_on = get_server_ip_power_on(tempdir, server['name'])
+                    print("server {} ip {} is_power_on {}".format(server['name'], server['ip'], is_power_on))
+                    if not is_power_on:
+                        _poweron_server(tempdir, server['name'])
                 num_installed = len([True for server in servers.values() if server.get('installed_docker')])
                 while num_installed < len(servers):
                     time.sleep(5)
@@ -217,6 +242,8 @@ def create_servers(servers, post_delete_cleanup, create_servers_stats, root_prog
                             'ssh_id_rsa_pub': ssh_id_rsa_pub,
                             'servers': tmp_keep_servers
                         }, f)
+                    if poweroff_servers:
+                        _poweroff_servers(servers, tempdir)
                 else:
                     _delete_servers(servers, tempdir)
                 post_delete_cleanup(servers, create_servers_stats)
@@ -227,6 +254,13 @@ def _delete_servers(servers, tempdir):
     for server in servers.values():
         if server.get('name'):
             delete_server(tempdir, server['name'])
+
+
+def _poweroff_servers(servers, tempdir):
+    print("Powering off servers")
+    for server in servers.values():
+        if server.get('name'):
+            _poweroff_server(tempdir, server['name'])
 
 
 def delete_kept_servers():

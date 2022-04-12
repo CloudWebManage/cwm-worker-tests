@@ -269,6 +269,7 @@ def post_delete_cleanup(servers, create_servers_stats):
 def run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options):
     skip_add_clear_workers = custom_load_options.get('skip_add_clear_workers')
     skip_prepare_load_generator = custom_load_options.get('skip_prepare_load_generator')
+    server_name_prefix = custom_load_options.get('server_name_prefix')
     with root_progress.start_sub(__spec__.name, 'run_distributed_load_tests') as progress:
         if skip_add_clear_workers:
             print("Skipping add clear workers")
@@ -285,7 +286,7 @@ def run_distributed_load_tests(servers, load_generator, prepare_domain_names, ro
                 # use_default_bucket = False
             prepare_custom_load_generator(servers, prepare_domain_names, root_progress, use_default_bucket, skip_prepare_load_generator)
         create_servers_stats = {}
-        with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress) as (tempdir, servers):
+        with create_servers.create_servers(servers, post_delete_cleanup, create_servers_stats, root_progress, server_name_prefix) as (tempdir, servers):
             with progress.set_start_end('prepare_remote_servers_start', 'prepare_remote_servers_end'):
                 print("Preparing remote servers for load test")
                 for server in servers.values():
