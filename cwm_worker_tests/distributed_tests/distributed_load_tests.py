@@ -410,9 +410,9 @@ def csv_decompress(csv_compression_method, csv_compressed_filename, csv_filename
         csv_decompress_gz(csv_compressed_filename, csv_filename)
 
 
-def get_datacenter(endpoint, base_servers_all_zone):
-    if base_servers_all_zone:
-        return base_servers_all_zone
+def get_datacenter(endpoint, datacenter):
+    if datacenter:
+        return datacenter
     else:
         # we can't determine the zone based on endpoint
         return '??'
@@ -425,10 +425,10 @@ def get_datacenter(endpoint, base_servers_all_zone):
     #     'https://{}'.format(config.get_load_testing_domain_num_hostname(3)): 'CA-TR',
     #     'http://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
     #     'https://{}'.format(config.get_load_testing_domain_num_hostname(4)): 'EU-LO',
-    # }.get(endpoint, '??') if not base_servers_all_zone else base_servers_all_zone
+    # }.get(endpoint, '??') if not datacenter else datacenter
 
 
-def aggregate_test_results(servers, total_duration_seconds, base_servers_all_zone, only_test_method, load_generator):
+def aggregate_test_results(servers, total_duration_seconds, datacenter, only_test_method, load_generator):
     overview_report = {}
     load_steps = []
     for num, _ in servers.items():
@@ -585,7 +585,7 @@ def aggregate_test_results(servers, total_duration_seconds, base_servers_all_zon
             all_ops_total_megabytes = all_ops_total_bytes / 1024 / 1024
             output_row = {
                 'endpoint': endpoint,
-                'datacenter': get_datacenter(endpoint, base_servers_all_zone),
+                'datacenter': get_datacenter(endpoint, datacenter),
                 'total-percent-errors': (all_ops_total_errors / all_ops_total_requests * 100) if all_ops_total_requests > 0 else 0,
                 'total-requests-per-second': all_ops_total_requests / total_duration_seconds,
                 'total-successful-requests-per-second': all_ops_total_successful_requests / total_duration_seconds,

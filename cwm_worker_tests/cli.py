@@ -55,9 +55,11 @@ def load_test(**kwargs):
 @click.option('--duration-seconds', default=10, type=int)
 @click.option('--concurrency', default=6, type=int)
 @click.option('--obj-size-kb', default=10, type=int)
-@click.option('--num-extra-eu-servers', default=0, type=int)
-@click.option('--num-base-servers', default=4, type=int)
-@click.option('--base-servers-all-zone', type=str)
+@click.option('--num-extra-eu-servers', type=int)
+@click.option('--num-base-servers', type=int)
+@click.option('--base-servers-all-zone')
+@click.option('--all-servers-num', type=int)
+@click.option('--all-servers-zone')
 @click.option('--only-test-method', type=str)
 @click.option('--load_generator', default='warp', type=str)
 @click.option('--custom-load-options', type=str, help="json string or base64 encoded json string prefixed with 'b64:'")
@@ -76,7 +78,7 @@ def distributed_load_test(**kwargs):
 @main.command()
 @click.option('--num-servers', required=True, type=int)
 @click.option('--total-duration-seconds', default=10, type=int)
-@click.option('--base-servers-all-zone', type=str)
+@click.option('--datacenter', type=str)
 @click.option('--only-test-method', type=str)
 @click.option('--load-generator', default='warp', type=str)
 def distributed_load_test_aggregate_test_results(**kwargs):
@@ -119,17 +121,15 @@ def distributed_load_test_multi(tests_config):
             "objects": 100,
             "duration_seconds": 600,
             "obj_size_kb": 100,
-            "num_base_servers": 4,
-            "base_servers_all_zone": "EU",
+            "all_servers_zone": "EU",
+            "all_servers_num": 4,
             "only_test_method": null,
             "load_generator": "custom",
             "concurrency": 1,
-            "num_extra_eu_servers": 4,
             "make_put_or_del_every_iterations": 1000
         },
         "multi_values": {
-            "concurrency": [1,5],
-            "num_extra_eu_servers": [1,4]
+            "concurrency": [1,5]
         },
         "tests": [
             {"obj_size_kb": 100, "make_put_or_del_every_iterations": 1000},

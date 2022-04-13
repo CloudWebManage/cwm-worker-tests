@@ -16,12 +16,22 @@ from cwm_worker_tests.multi_dict_generator import multi_dict_generator
 
 
 def run_test(testnum, test, dry_run, skip_add_clear_workers=False, skip_prepare_load_generator=False, with_deploy=True):
+    if test.get('all_servers_num') or test.get('all_servers_zone'):
+        all_servers_num, all_servers_zone = test['all_servers_num'], test['all_servers_zone']
+        num_extra_eu_servers, num_base_servers, base_servers_all_zone = None, None, None
+    else:
+        all_servers_num, all_servers_zone = None, None
+        num_extra_eu_servers = test.get('num_extra_eu_servers', 0)
+        num_base_servers = test.get('num_base_servers', 4)
+        base_servers_all_zone = test.get('base_servers_all_zone', 'EU')
     kwargs = dict(
         objects=test.get('objects', 10), duration_seconds=test.get('duration_seconds', 10),
         concurrency=test.get('concurrency', 6), obj_size_kb=test.get('obj_size_kb', 10),
-        num_extra_eu_servers=test.get('num_extra_eu_servers', 0),
-        num_base_servers=test.get('num_base_servers', 4),
-        base_servers_all_zone=test.get('base_servers_all_zone', 'EU'),
+        num_extra_eu_servers=num_extra_eu_servers,
+        num_base_servers=num_base_servers,
+        base_servers_all_zone=base_servers_all_zone,
+        all_servers_num=all_servers_num,
+        all_servers_zone=all_servers_zone,
         only_test_method=test.get('only_test_method'),
         load_generator=test.get('load_generator', 'warp'),
         custom_load_options={
@@ -205,7 +215,7 @@ def aggregate_multi_test_stats(cluster_zone=None):
         totals_row['testnum'] = testnum
         for key in ["objects", "duration_seconds", "concurrency", "obj_size_kb", "only_test_method", "load_generator", "force_skip_add_clear_prepare"]:
             totals_row[key] = (test['test'].get(key) or '')
-        totals_row['num_load_servers'] = (test['test'].get('num_extra_eu_servers') or 0) + (test['test'].get('num_base_servers') or 0)
+        totals_row['num_load_servers'] = (test['test'].get('num_extra_eu_servers') or 0) + (test['test'].get('num_base_servers') or 0) + (test['test'].get('all_servers_num') or 0)
         totals_row['num_domain_names'] = test['test'].get('custom_load_options', {}).get('number_of_random_domain_names', 0)
         totals_row['make_put_or_del_every_iterations'] = test['test'].get('custom_load_options', {}).get('make_put_or_del_every_iterations', 0)
         totals_row['start'] = (test.get('progress') or {}).get('cwm_worker_tests.distributed_tests.distributed_load_tests:run_distributed_load_tests', {}).get('start_load_tests_start')

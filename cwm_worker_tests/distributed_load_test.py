@@ -14,7 +14,7 @@ from cwm_worker_cluster.test_instance import api as test_instance_api
 
 def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, num_extra_eu_servers:int,
          num_base_servers:int, base_servers_all_zone:str, only_test_method:str, load_generator:str,
-         custom_load_options:dict, with_deploy:bool):
+         custom_load_options:dict, with_deploy:bool, all_servers_num:int, all_servers_zone:str):
     ret, out = subprocess.getstatusoutput("rm -rf {distdir}; mkdir {distdir}".format(distdir=distributed_load_tests.DISTRIBUTED_LOAD_TESTS_OUTPUT_DIR))
     assert ret == 0, out
     root_progress = RootProgress()
@@ -56,7 +56,11 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
             # prepare_domain_names = None
         start_time = datetime.datetime.now()
         print('{} start'.format(start_time))
-        if num_base_servers > 4:
+        if all_servers_num or all_servers_zone:
+            assert not num_extra_eu_servers and not num_base_servers and not base_servers_all_zone
+            assert all_servers_num > 0
+            assert all_servers_zone
+        elif num_base_servers > 4:
             raise Exception("Cannot have more then 4 base servers")
         elif num_base_servers < 4 and num_extra_eu_servers > 0:
             raise Exception("Cannot have extra eu servers if base servers are less then 4")
@@ -73,24 +77,22 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
             "num_extra_eu_servers": num_extra_eu_servers,
             "num_base_servers": num_base_servers,
             "base_servers_all_zone": base_servers_all_zone,
-            "load_generator": load_generator
+            "load_generator": load_generator,
+            "all_servers_num": all_servers_num,
+            "all_servers_zone": all_servers_zone
         }))
-        servers = {}
-        for i in range(num_base_servers):
-            server_num = i+1
-            if base_servers_all_zone:
-                datacenter = base_servers_all_zone.upper()
-            else:
-                datacenter = {1: 'EU', 2: 'IL', 3: 'CA-TR', 4: 'EU-LO'}[server_num]
-            servers[server_num] = {'datacenter': datacenter, **deepcopy(load_test_kwargs)}
-        for i in range(5, 5+num_extra_eu_servers):
-            servers[i] = {'datacenter': base_servers_all_zone.upper() if base_servers_all_zone else 'EU', **deepcopy(load_test_kwargs)}
+        if all_servers_num:
+            servers = get_all_servers(load_test_kwargs, all_servers_zone, all_servers_num)
+            stats_datacenter = all_servers_zone
+        else:
+            servers = get_servers(base_servers_all_zone, load_test_kwargs, num_base_servers, num_extra_eu_servers)
+            stats_datacenter = base_servers_all_zone
         # run_failed = True
         run_failed = not distributed_load_tests.run_distributed_load_tests(servers, load_generator, prepare_domain_names, root_progress, custom_load_options)
         pprint({"run_failed": progress.set('run_failed_after_run_distributed_load_tests', run_failed)})
         end_time = datetime.datetime.now()
         print('{} end load test'.format(end_time))
-        if not distributed_load_tests.aggregate_test_results(servers, duration_seconds, base_servers_all_zone, only_test_method, load_generator):
+        if not distributed_load_tests.aggregate_test_results(servers, duration_seconds, stats_datacenter, only_test_method, load_generator):
             run_failed = True
         pprint({"run_failed": progress.set('run_failed_after_aggregate_test_results', run_failed)})
         pprint({
@@ -100,6 +102,32 @@ def main(objects:int, duration_seconds:int, concurrency:int, obj_size_kb:int, nu
             "base_servers_all_zone": base_servers_all_zone,
             'start_time': str(start_time.astimezone(pytz.timezone('Israel'))),
             'end_time': str(end_time.astimezone(pytz.timezone('Israel'))),
-            "load_generator": load_generator
+            "load_generator": load_generator,
+            "all_servers_num": all_servers_num,
+            "all_servers_zone": all_servers_zone
         })
         assert not run_failed
+
+
+def get_all_servers(load_test_kwargs, all_servers_zone, all_servers_num):
+    servers = {}
+    for i in range(all_servers_num):
+        server_num = i + 1
+        datacenter = all_servers_zone.upper()
+        servers[server_num] = {'datacenter': datacenter, **deepcopy(load_test_kwargs)}
+    return servers
+
+
+def get_servers(base_servers_all_zone, load_test_kwargs, num_base_servers, num_extra_eu_servers):
+    servers = {}
+    for i in range(num_base_servers):
+        server_num = i + 1
+        if base_servers_all_zone:
+            datacenter = base_servers_all_zone.upper()
+        else:
+            datacenter = {1: 'EU', 2: 'IL', 3: 'CA-TR', 4: 'EU-LO'}[server_num]
+        servers[server_num] = {'datacenter': datacenter, **deepcopy(load_test_kwargs)}
+    for i in range(5, 5 + num_extra_eu_servers):
+        servers[i] = {'datacenter': base_servers_all_zone.upper() if base_servers_all_zone else 'EU',
+                      **deepcopy(load_test_kwargs)}
+    return servers
