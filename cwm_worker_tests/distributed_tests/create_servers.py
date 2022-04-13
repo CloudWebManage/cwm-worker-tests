@@ -1,11 +1,11 @@
 import os
-import uuid
 import json
 import time
 import tempfile
 import subprocess
 from contextlib import contextmanager
 
+import shortuuid
 
 from cwm_worker_cluster import config
 from cwm_worker_tests.retry import retry_exception_decorator
@@ -175,9 +175,10 @@ def create_servers(servers, post_delete_cleanup, create_servers_stats, root_prog
                             continue
                         datacenter = server['datacenter']
                         server_name = server['name'] = '{}-{}'.format(
-                            server_name_prefix if server_name_prefix else 'objstore-load-test',
-                            str(uuid.uuid4())
+                            server_name_prefix if server_name_prefix else 'obj-load-test',
+                            str(shortuuid.uuid())
                         )
+                        assert len(server_name) <= 40
                         password = server['password'] = str("Aa1!%s" % os.urandom(12).hex())
                         server['create_server_process'] = start_create_server_process(tempdir, server_name, password, datacenter)
                     try:
