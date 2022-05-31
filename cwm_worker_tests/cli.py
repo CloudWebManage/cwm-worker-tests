@@ -170,6 +170,7 @@ def distributed_load_test_delete_kept_servers():
 @click.option('--output-dir', required=False, type=str, help='Path to output CSV files. If not provided will use .data/bucket_name')
 @click.option('--only-upload', is_flag=True, type=bool, help='Only run the upload')
 @click.option('--only-download', is_flag=True, type=bool, help='Only run the download')
+@click.option('--only-stats', is_flag=True, help='Only run stats aggregation, must set --output-dir and same args that were used to generate the output')
 def upload_download_test(**kwargs):
     """Run upload and/or download test with generated test files"""
     cwm_worker_tests.upload_download_test.main(**kwargs)

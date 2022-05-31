@@ -1,7 +1,12 @@
 import os
-import subprocess
 import datetime
+import subprocess
+from glob import glob
+import dataflows as df
+from pprint import pprint
 from threading import Thread, Lock
+from collections import defaultdict
+
 from minio import Minio
 
 
@@ -156,8 +161,10 @@ def download(endpoint, access_key, secret_key, bucket, num_files, file_size, dow
     print(f'Download finished! [{download_elapsed_time_seconds} seconds]')
 
 
-def main(endpoint:str, access_key:str, secret_key:str, bucket:str, num_files:int, file_size:int,
-         download_iterations:int, download_threads:int, output_dir:str, only_upload:bool, only_download:bool):
+def main_upload_download(
+        endpoint:str, access_key:str, secret_key:str, bucket:str, num_files:int, file_size:int,
+        download_iterations:int, download_threads:int, output_dir:str, only_upload:bool, only_download:bool
+):
     print('Arguments:')
     for k, v in locals().items():
         print(f'  {k: >{20}}  =  {v}')
@@ -184,3 +191,88 @@ def main(endpoint:str, access_key:str, secret_key:str, bucket:str, num_files:int
                  download_threads=download_threads, output_dir=output_dir)
 
     print(f'--- [DONE] ---')
+    return output_dir
+
+
+def stats_process_upload_rows(stats):
+
+    def iterator(rows):
+        for row in rows:
+            yield row
+            stats['num_rows'] += 1
+            time_seconds = float(row['file_upload_elapsed_time_seconds'])
+            if not stats['min_time_seconds'] or stats['min_time_seconds'] > time_seconds:
+                stats['min_time_seconds'] = time_seconds
+            if stats['max_time_seconds'] < time_seconds:
+                stats['max_time_seconds'] = time_seconds
+            stats['total_time_seconds'] += time_seconds
+        stats['avg_time_seconds'] = stats['total_time_seconds'] / stats['num_rows']
+
+    return iterator
+
+
+def stats_process_download_rows(stats, file_size):
+
+    def iterator(rows):
+        for row in rows:
+            yield row
+            stats['num_rows'] += 1
+            error = row['error']
+            if not error or error == 'None':
+                error = None
+            size_bytes = int(row['object_size_bytes'])
+            if size_bytes != file_size and error is None:
+                error = f'invalid object size: {size_bytes}'
+            if error is not None:
+                stats['num_errors'] += 1
+                if 'HTTPSConnectionPool' in error:
+                    stats['num_https_errors'] += 1
+                elif 'invalid object size' in error:
+                    stats['num_invalid_size_errors'] += 1
+                else:
+                    raise Exception(f"Unknown error: {error}")
+            else:
+                stats['num_success'] += 1
+                time_seconds = float(row['object_elapsed_time_seconds'])
+                if not stats['success_min_time_seconds'] or stats['success_min_time_seconds'] > time_seconds:
+                    stats['success_min_time_seconds'] = time_seconds
+                if stats['success_max_time_seconds'] < time_seconds:
+                    stats['success_max_time_seconds'] = time_seconds
+                stats['success_total_time_seconds'] += time_seconds
+        stats['avg_success_time_seconds'] = stats['success_total_time_seconds'] / stats['num_success']
+        stats['percent_errors'] = stats['num_errors'] / stats['num_rows'] * 100
+
+    return iterator
+
+
+def main_stats(
+        num_files, file_size, download_iterations, download_threads, output_dir,
+        only_upload, only_download, **kwargs
+):
+    download_report_filename, upload_report_filename = None, None
+    for filename in glob(os.path.join(output_dir, '*.csv')):
+        if '/download-report-' in filename:
+            assert not download_report_filename
+            download_report_filename = filename
+        elif '/upload-report-' in filename:
+            assert not upload_report_filename
+            upload_report_filename = filename
+    assert download_report_filename and upload_report_filename
+    print('upload_report_filename', upload_report_filename)
+    print('download_report_filename', download_report_filename)
+    print("Generating upload stats...")
+    upload_stats = defaultdict(int)
+    df.Flow(df.load(upload_report_filename), stats_process_upload_rows(upload_stats)).process()
+    print("Generating download stats...")
+    download_stats = defaultdict(int)
+    df.Flow(df.load(download_report_filename), stats_process_download_rows(download_stats, file_size)).process()
+    print("Upload Stats")
+    pprint(dict(upload_stats))
+    print("Download Stats")
+    pprint(dict(download_stats))
+
+
+def main(*args, only_stats=False, **kwargs):
+    if not only_stats:
+        kwargs['output_dir'] = main_upload_download(*args, **kwargs)
+    main_stats(**kwargs)
